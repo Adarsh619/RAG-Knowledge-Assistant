@@ -43,9 +43,20 @@ export async function updateSession(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname;
-  if (!signedIn && pathname === "/api/chat") {
+  if (
+    !signedIn &&
+    (pathname === "/api/chat" || pathname === "/api/documents")
+  ) {
     return withSessionCookies(
-      NextResponse.json({ error: "Sign in to use chat." }, { status: 401 }),
+      NextResponse.json(
+        {
+          error:
+            pathname === "/api/chat"
+              ? "Sign in to use chat."
+              : "Sign in to manage documents.",
+        },
+        { status: 401 },
+      ),
     );
   }
   if (!signedIn && isProtectedPath(pathname)) {

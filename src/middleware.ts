@@ -13,5 +13,6 @@ export const config = {
     "/login",
     "/signup",
     "/api/chat",
+    "/api/documents",
   ],
 };

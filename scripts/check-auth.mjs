@@ -78,10 +78,16 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
       return Response.json({ keys: [jwk] });
     if (url.pathname.endsWith("/signup")) return Response.json(user);
     if (url.pathname.endsWith("/resend")) {
-      lastResend = { body: await request.json(), redirectTo: url.searchParams.get("redirect_to") };
+      lastResend = {
+        body: await request.json(),
+        redirectTo: url.searchParams.get("redirect_to"),
+      };
       if (lastResend.body.email === "rate-limited@example.test") {
         return Response.json(
-          { code: "over_email_send_rate_limit", msg: "Email rate limit exceeded" },
+          {
+            code: "over_email_send_rate_limit",
+            msg: "Email rate limit exceeded",
+          },
           { status: 429, headers: { "X-Supabase-Api-Version": "2024-01-01" } },
         );
       }
@@ -156,11 +162,19 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
       }
     });
 
-    await t.test("signed-out chat API returns JSON 401", async () => {
-      const response = await updateSession(pageRequest("/api/chat"));
-      assert.equal(response.status, 401);
-      assert.equal((await response.json()).error, "Sign in to use chat.");
-    });
+    await t.test(
+      "signed-out chat and documents APIs return JSON 401",
+      async () => {
+        for (const [path, message] of [
+          ["/api/chat", "Sign in to use chat."],
+          ["/api/documents", "Sign in to manage documents."],
+        ]) {
+          const response = await updateSession(pageRequest(path));
+          assert.equal(response.status, 401);
+          assert.equal((await response.json()).error, message);
+        }
+      },
+    );
 
     await t.test(
       "sign-up can require confirmation without creating a session",
@@ -176,30 +190,41 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
       },
     );
 
-    await t.test("resending confirmation preserves PKCE and creates no session", async () => {
-      const { data, error } = await client().auth.resend({
-        type: "signup",
-        email: user.email,
-        options: { emailRedirectTo: "http://localhost:3000/auth/callback?next=%2Fchat" },
-      });
-      assert.equal(error, null);
-      assert.equal(data.session, null);
-      assert.equal(lastResend.body.type, "signup");
-      assert.ok(lastResend.body.code_challenge);
-      assert.equal(lastResend.body.code_challenge_method, "s256");
-      assert.equal(new URL(lastResend.redirectTo).pathname, "/auth/callback");
-      assert.equal(new URL(lastResend.redirectTo).searchParams.get("next"), "/chat");
-      assert.equal((await client().auth.getSession()).data.session, null);
-    });
+    await t.test(
+      "resending confirmation preserves PKCE and creates no session",
+      async () => {
+        const { data, error } = await client().auth.resend({
+          type: "signup",
+          email: user.email,
+          options: {
+            emailRedirectTo: "http://localhost:3000/auth/callback?next=%2Fchat",
+          },
+        });
+        assert.equal(error, null);
+        assert.equal(data.session, null);
+        assert.equal(lastResend.body.type, "signup");
+        assert.ok(lastResend.body.code_challenge);
+        assert.equal(lastResend.body.code_challenge_method, "s256");
+        assert.equal(new URL(lastResend.redirectTo).pathname, "/auth/callback");
+        assert.equal(
+          new URL(lastResend.redirectTo).searchParams.get("next"),
+          "/chat",
+        );
+        assert.equal((await client().auth.getSession()).data.session, null);
+      },
+    );
 
-    await t.test("confirmation resend surfaces the sender rate limit", async () => {
-      const { error } = await client().auth.resend({
-        type: "signup",
-        email: "rate-limited@example.test",
-      });
-      assert.equal(error.code, "over_email_send_rate_limit");
-      assert.equal((await client().auth.getSession()).data.session, null);
-    });
+    await t.test(
+      "confirmation resend surfaces the sender rate limit",
+      async () => {
+        const { error } = await client().auth.resend({
+          type: "signup",
+          email: "rate-limited@example.test",
+        });
+        assert.equal(error.code, "over_email_send_rate_limit");
+        assert.equal((await client().auth.getSession()).data.session, null);
+      },
+    );
 
     await t.test("invalid credentials do not create a session", async () => {
       const { error } = await client().auth.signInWithPassword({
@@ -236,7 +261,13 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
     await t.test(
       "signed-in protected pages and API are permitted",
       async () => {
-        for (const path of ["/", "/chat", "/documents", "/api/chat"]) {
+        for (const path of [
+          "/",
+          "/chat",
+          "/documents",
+          "/api/chat",
+          "/api/documents",
+        ]) {
           const response = await updateSession(pageRequest(path, true));
           assert.equal(response.status, 200);
           assert.equal(response.headers.get("x-middleware-next"), "1");

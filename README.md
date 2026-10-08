@@ -1,6 +1,6 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 3 — Supabase authentication with the existing local mock chat.**
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 4 — private PDF uploads and Supabase Storage, with authentication and local mock chat.**
 
 ## Run locally
 
@@ -13,7 +13,7 @@ npm run dev
 
 Open http://localhost:3000/login, or the URL printed by Next.js if that port is occupied. Stop a production preview on the same port before starting development.
 
-No LLM API key, credits, or payment method is needed. Supabase authentication uses the existing Free-plan project URL and public publishable key in `.env.local`. The exact names are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; do not use a private secret/service-role key. If `LLM_MODE` is unset or blank, chat defaults to `mock`. Preserve existing local values and keep:
+No LLM API key, credits, or payment method is needed. Supabase authentication and Storage use the existing Free-plan project URL and public publishable key in `.env.local`. The exact names are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; do not use a private secret/service-role key. If `LLM_MODE` is unset or blank, chat defaults to `mock`. Preserve existing local values and keep:
 
 ```dotenv
 LLM_MODE=mock
@@ -23,15 +23,15 @@ LLM_MODE=mock
 
 ## What works now
 
-- `/`: the Phase 1 dashboard and placeholder counts.
+- `/`: dashboard with links to the private library; conversation/index counts remain placeholders.
 - `/chat`: working local message submission, user and assistant bubbles, a loading state, error messages, and a clearly labeled mock response.
-- `/documents`: the Phase 1 empty library and disabled upload UI.
+- `/documents`: private PDF upload, persistent file listing, name/size/date metadata, and owner deletion.
 - Shared responsive navigation, active-page indication, and skip-to-content link.
-- `/login` and `/signup`: email/password authentication; application pages and the chat API now require a verified session.
+- `/login` and `/signup`: email/password authentication; application pages, chat API, and document API require a verified session.
 
 Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current message; mock responses do not reason over previous messages.
 
-Chat messages live in React state only. Refreshing or leaving the chat clears them. Chat content is not written to a database, browser storage, or file. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. Document uploads, embeddings, retrieval, RAG, citations, and conversation persistence remain outside this phase.
+Chat messages live in React state only. Refreshing or leaving the chat clears them. Chat content is not written to a database, browser storage, or file. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. PDF text extraction, embeddings, retrieval, RAG, citations, and conversation persistence remain outside this phase.
 
 ## Files created or modified in Phase 2 (historical locations)
 
@@ -165,7 +165,7 @@ Phase 2 verification completed: TypeScript, lint with zero warnings, production 
 1. Project foundation and UI structure — completed
 2. Basic chat architecture without RAG, local mock provider — completed
 3. Supabase authentication — completed
-4. PDF upload and Supabase Storage
+4. PDF upload and Supabase Storage — current phase
 5. PDF text extraction
 6. Document chunking and metadata
 7. Embedding generation
@@ -176,7 +176,7 @@ Phase 2 verification completed: TypeScript, lint with zero warnings, production 
 12. Conversation history and document management
 13. Error handling, security, UI improvements, and Vercel deployment
 
-**Stop after reviewing and testing Phase 3. Phase 4 requires a separate instruction.** No LangChain, LangGraph, agents, or RAG frameworks are used.
+**Stop after reviewing and testing Phase 4. Phase 5 requires a separate instruction.** No LangChain, LangGraph, agents, or RAG frameworks are used.
 
 ## Phase 3 authentication
 
@@ -287,6 +287,121 @@ TypeScript, lint with zero warnings, the production build, all 17 offline auth t
 
 Browser checks verified authenticated access to `/`, `/documents`, and `/chat`; session persistence after dashboard/chat refresh; a signed-in `/login?next=/chat` redirect; and an authenticated request producing the explicit local mock reply. Sign-out returned to login, browser Back did not reveal protected content, and `/documents` again redirected to login. Signed-out page/API/callback behavior and live invalid-credentials handling were also verified. Confirmation resend is validated offline without consuming another live email quota.
 
-The chat provider still makes no external LLM request. Its network-blocking tests observed zero attempts, and OpenAI remains disabled. Only basic Supabase Auth was used in live authentication checks; no paid add-on or paid API was used or enabled by this implementation.
+The chat provider still makes no external LLM request. Its network-blocking tests observed zero attempts, and OpenAI remains disabled. Only basic Supabase Auth was used in Phase 3 live authentication checks; no paid add-on or paid API was used or enabled by that implementation.
+
+## Phase 4 — private PDF storage
+
+The Documents page now supports PDF selection, upload, persistent listing, and owner deletion. File names, sizes, and upload dates come from Storage metadata. The list loads 50 files at a time and has a **Load more documents** control. The dashboard links to this library and does not pretend it has a live document count.
+
+### Why Storage and a private bucket
+
+Supabase Storage holds the original PDF bytes. PostgreSQL stores structured rows, and Supabase's existing Storage tables already record object paths, owners, sizes, and timestamps. Phase 4 therefore creates **no application/profile/document table**. Later extraction/indexing phases can read these private files and associate chunks with their object paths; no PDF content is processed now.
+
+The `documents` bucket is private with `file_size_limit = 4194304` (4 MiB) and `allowed_mime_types = ['application/pdf']`. This is below the Free plan's per-file ceiling and keeps this simple server-upload design small. No paid compute, add-on, sender, branch, or API is required. The connected organization's Free plan was verified before setup.
+
+Objects use `user-id/random-uuid--sanitized-name.pdf`. The server obtains the user ID from `auth.getUser()`, generates the UUID, removes directory components, converts unsafe filename characters to hyphens, limits the basename to 100 characters, and appends `.pdf`. This prevents path traversal and collisions. The list displays the sanitized filename rather than the UUID. The original spelling is not stored in a separate table.
+
+### Policies and ownership
+
+`supabase/storage/documents.sql` contains the exact setup applied to the existing development project. It creates the bucket and three policies on Supabase's existing `storage.objects` table:
+
+| Operation | Required conditions |
+| --- | --- |
+| INSERT/upload | `authenticated` role; `documents` bucket; first folder equals `auth.uid()`; `owner_id` equals `auth.uid()`; exactly one folder; safe generated PDF filename |
+| SELECT/list/read | `authenticated` role; same bucket; both first folder and `owner_id` equal `auth.uid()` |
+| DELETE | Same owner conditions as SELECT |
+| UPDATE/overwrite/move | No policy granted; uploads use `upsert: false` |
+
+The app uses the publishable key and the normal user's session. Running a Storage request on the server does **not** bypass RLS. Bucket/policy provisioning uses the connected developer tool, not a service-role key in the application. Public file URLs and signed sharing URLs are not created. Do not add a broad permissive Storage policy later: permissive policies combine with OR and can undo owner isolation.
+
+Both the API and RLS reconstruct/check the user's folder. DELETE accepts only a generated document ID, never an arbitrary storage path or supplied owner ID. Actual file deletion uses `storage.remove()` so the object and metadata are handled by Storage; the application never deletes `storage.objects` rows directly.
+
+### Upload and request flow
+
+```text
+Authenticated user selects a PDF on /documents
+  → Browser checks extension, MIME type, nonempty size, and 4 MiB limit
+  → POST /api/documents with one multipart file
+  → Middleware refreshes/verifies the session
+  → Route verifies the user with getUser()
+  → Server bounds the request stream and independently validates the file
+  → Server checks the first five bytes for %PDF- (no PDF parsing)
+  → Generate user-id/uuid--safe-name.pdf
+  → Upload to the private documents bucket with the user's session
+  → Bucket restrictions and owner INSERT policy are enforced
+  → Return success and GET /api/documents refreshes the list
+```
+
+The server bounds actual request bytes even if Content-Length is missing or misleading. Multipart overhead is limited to a small allowance above the file cap. Upload accepts exactly one file and rejects extra owner/path fields. Unsupported files, empty files, oversized files, and disguised files without a PDF header are rejected before Storage is called. Browser validation is only an early usability check.
+
+The extension/MIME/header checks identify the expected format; they do not prove an entire PDF is well formed. Bucket MIME restrictions also depend on the declared content type. Full parsing and text extraction belong to later phases. Uploaded files remain private even when a caller bypasses the app and contacts Storage directly.
+
+GET `/api/documents?offset=0` returns names/sizes/dates and the next offset. DELETE `/api/documents` accepts JSON `{ "id": "generated-object-filename.pdf" }`, checks origin and authentication, and removes only the reconstructed owner path. All document API responses are `private, no-store`. The UI shows loading, success, errors, retry, and a delete confirmation. Its upload indicator is an honest pending state rather than a made-up percentage.
+
+### Phase 4 file inventory
+
+Created:
+
+```text
+src/types/document.ts                         List/mutation contracts
+src/lib/storage/documents.ts                   Limits, validation, safe names
+src/lib/storage/document-handler.ts            List/upload/delete handlers
+src/lib/storage/README.md                      Storage architecture notes
+src/app/api/documents/route.ts                 Authenticated GET/POST/DELETE
+src/components/documents/documents-workspace.tsx  Upload and library UI
+supabase/storage/documents.sql                Bucket and owner-policy setup
+supabase/storage/check-ownership.sql          READ ONLY live isolation check
+scripts/check-storage.mjs                     Offline SDK/API security checks
+scripts/storage-fixtures.mjs                  Generated public PDF fixture
+scripts/create-storage-test-files.mjs          Ignored local validation files
+```
+
+Modified: `src/app/(protected)/documents/page.tsx`, `src/app/(protected)/page.tsx`, `src/components/app-shell.tsx`, `src/middleware.ts`, `src/lib/supabase/middleware.ts`, `src/lib/supabase/README.md`, `scripts/check-auth.mjs`, `package.json`, and `README.md`.
+
+No application dependency was added. Existing pinned Supabase SDKs provide Storage. The lockfile, environment files, AI providers, auth forms, and RAG placeholders are unchanged. Prettier was run as a pinned temporary formatting tool rather than an application dependency.
+
+### Verify Phase 4
+
+```powershell
+npm run typecheck
+npm run lint -- --max-warnings=0
+npm run test:chat
+npm run test:auth
+npm run test:storage
+npm run build
+npm run test:storage:fixtures
+```
+
+The Storage tests use the real SDK with an offline fake service. They check authentication failure, PDF constraints, bounded streams, safe names, forged owner/path rejection, cross-origin rejection, metadata listing, pagination, owner deletion, and safe errors. The user-A/user-B fixture validates API path scoping; it is not a substitute for testing the deployed RLS policies. No real project or LLM is contacted by these tests.
+
+Generated disposable files are placed in the ignored `.setup-cache/storage-tests/` directory. Live checks:
+
+1. Sign in with the existing account directly in the app. Never paste credentials or session tokens into chat.
+2. Upload `phase-4-storage-test.pdf`. Verify the success state and a row with filename, byte size, and upload date.
+3. Refresh the page. The row should remain, since the source of truth is Storage rather than React state.
+4. Select `unsupported.txt` and `oversized.pdf`: the browser should reject them. The automated handler tests independently verify server rejection.
+5. Upload `disguised.pdf`: the server must reject its missing PDF header and leave the list unchanged.
+6. Run the READ ONLY isolation check with an existing disposable test PDF. It reduces the SQL role to authenticated/anon and tests the real SELECT policy with owner, different-user, and signed-out identities. It creates no account and changes no Storage row or file byte. Owner deletion is tested through the app, not by SQL metadata manipulation.
+7. Delete the disposable PDF through its row's confirmation control. Verify it disappears, including after a refresh.
+8. Signed out, document API requests must return 401 and `/documents` must redirect to login.
+9. Send a chat message and check the mock badge/local reply. Keep `LLM_MODE=mock` and the empty OpenAI key; the chat tests still block all attempted outbound LLM requests.
+
+Setup already applied to this development project: do not rerun the one-time bucket/policy script here. A clone targeting a different project can review and apply it in that project's SQL editor or trusted developer tooling. Inspect existing policies before applying it to a project that already has Storage configured.
+
+Supabase advisors also reported pre-existing grants on the project's `rls_auto_enable` helper and disabled leaked-password protection; these were present before the bucket setup. No paid Auth feature was enabled. The Storage setup created only the three owner policies described above. See [helper-grant guidance](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable) and [password protection documentation](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) for later review.
+
+References: [Storage buckets](https://supabase.com/docs/guides/storage/buckets/fundamentals), [RLS access control](https://supabase.com/docs/guides/storage/security/access-control), [object ownership](https://supabase.com/docs/guides/storage/security/ownership), and [file limits](https://supabase.com/docs/guides/storage/uploads/file-limits).
+
+### Phase 4 verification results
+
+Phase 4 is complete. TypeScript, lint with zero warnings, the production build, 18 offline Storage tests, 17 auth tests, and eight chat tests passed.
+
+Live browser checks with the existing account verified uploading the generated 603-byte `phase-4-storage-test.pdf`, its filename/size/upload-date listing, and persistence after refresh. Unsupported and oversized selections were rejected. A disguised `.pdf` reached the API and was rejected for its missing PDF header. Deleting the disposable PDF through the app succeeded, and it remained absent after refresh. The existing chat returned its explicit local mock response.
+
+The read-only SQL check passed against the deployed Storage policies: the authenticated owner could read the uploaded test object, while a different user ID and the anonymous role could not. This used temporary SQL roles/identity claims, not a second real account, and changed no Storage rows or bytes. Offline API checks also verify that another user's deletion path cannot target the owner's object. Cookie-free requests to the running app returned 401 for document GET/POST/DELETE and redirected `/documents` to login.
+
+The user's one-time authorization covered this Phase 4 read-only ownership check and app deletion of the generated disposable test PDF. The earlier SQL metadata-write test was replaced by `supabase/storage/check-ownership.sql`; only its read-only version was executed for the completed ownership check.
+
+`LLM_MODE=mock` remains active, the OpenAI key remains empty, and the network-blocking chat tests observed zero outbound attempts. No OpenAI request or usage was generated by Phase 4 implementation or validation. Only basic Storage/Auth operations on the verified Supabase Free plan were used; no paid external API, upgrade, or paid add-on was enabled. `.env.local` and the generated fixtures remain ignored by Git. No application table, PDF extraction, or RAG feature was added. Phase 5 requires a separate user instruction.
 
 References: [SSR clients and session verification](https://supabase.com/docs/guides/auth/server-side/creating-a-client), [password authentication](https://supabase.com/docs/guides/auth/passwords), [publishable keys](https://supabase.com/docs/guides/getting-started/api-keys).
