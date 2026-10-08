@@ -1,3 +1,5 @@
+import type { ChunkingResult } from "./chunk.ts";
+
 export interface ExtractedPage {
   pageNumber: number;
   text: string;
@@ -14,4 +16,5 @@ export interface PdfExtraction {
 export interface ExtractionResponse {
   document: { id: string; name: string };
   extraction: PdfExtraction;
+  chunking: ChunkingResult;
 }

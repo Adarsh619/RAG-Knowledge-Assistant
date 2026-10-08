@@ -14,6 +14,7 @@ import {
   isDocumentId,
 } from "../storage/documents.ts";
 import { extractPdfText, PdfExtractionError } from "./extract-text.ts";
+import { chunkDocument } from "../rag/chunk-document.ts";
 
 function json(body: unknown, status = 200) {
   return Response.json(body, {
@@ -98,6 +99,7 @@ export async function handleExtractDocument(
     return json({
       document: { id: body.id, name: documentDisplayName(body.id) },
       extraction,
+      chunking: chunkDocument(body.id, extraction.pages),
     } satisfies ExtractionResponse);
   } catch (cause) {
     if (cause instanceof InputError || cause instanceof PdfExtractionError) {

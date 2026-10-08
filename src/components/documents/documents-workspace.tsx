@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Icon } from "@/components/ui/icon";
 import { ExtractionPreview } from "./extraction-preview";
+import { ChunkPreview } from "./chunk-preview";
 import type { ExtractionResponse } from "@/types/extraction";
 import {
   formatFileSize,
@@ -259,7 +260,8 @@ export function DocumentsWorkspace() {
       )}
       {extractingId && (
         <p role="status" className="mt-4 text-sm text-emerald-800">
-          Reading your private PDF and extracting text locally…
+          Reading your private PDF, extracting text, and creating chunks
+          locally…
         </p>
       )}
       {error && (
@@ -437,14 +439,18 @@ export function DocumentsWorkspace() {
         )}
       </section>
       {extraction && (
-        <ExtractionPreview
-          result={extraction}
-          onClose={() => setExtraction(null)}
-        />
+        <>
+          <ExtractionPreview
+            result={extraction}
+            onClose={() => setExtraction(null)}
+          />
+          <ChunkPreview result={extraction} />
+        </>
       )}
       <p className="mt-6 text-xs leading-5 text-slate-400">
-        PDFs are stored privately. Extract text to test local parsing. Document
-        search and answers with sources will arrive in later phases.
+        PDFs are stored privately. Extract text to inspect local parsing and
+        chunks. Document search and answers with sources will arrive in later
+        phases.
       </p>
     </>
   );
