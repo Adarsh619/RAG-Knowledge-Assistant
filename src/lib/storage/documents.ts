@@ -22,7 +22,7 @@ export function validatePdfSelection(
   return null;
 }
 
-export async function hasPdfHeader(file: File) {
+export async function hasPdfHeader(file: Blob) {
   const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
   return [0x25, 0x50, 0x44, 0x46, 0x2d].every(
     (byte, index) => header[index] === byte,

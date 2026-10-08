@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Icon } from "@/components/ui/icon";
+import { ExtractionPreview } from "./extraction-preview";
+import type { ExtractionResponse } from "@/types/extraction";
 import {
   formatFileSize,
   MAX_PDF_SIZE_LABEL,
@@ -30,12 +32,15 @@ export function DocumentsWorkspace() {
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
+  const [extraction, setExtraction] = useState<ExtractionResponse | null>(null);
+  const extractionRequest = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const listRequest = useRef<AbortController | null>(null);
   const mutating = useRef(false);
-  const busy = uploading || deletingId !== null;
+  const busy = uploading || deletingId !== null || extractingId !== null;
 
   const loadDocuments = useCallback(async (offset = 0) => {
     listRequest.current?.abort();
@@ -78,7 +83,10 @@ export function DocumentsWorkspace() {
 
   useEffect(() => {
     void loadDocuments();
-    return () => listRequest.current?.abort();
+    return () => {
+      listRequest.current?.abort();
+      extractionRequest.current?.abort();
+    };
   }, [loadDocuments]);
 
   function selectFile(event: ChangeEvent<HTMLInputElement>) {
@@ -136,6 +144,9 @@ export function DocumentsWorkspace() {
       const body = await readResponse<DocumentMutationResponse>(response);
       setSuccess(body.message);
       setConfirmDeleteId(null);
+      setExtraction((current) =>
+        current?.document.id === id ? null : current,
+      );
       await loadDocuments();
     } catch (cause) {
       setError(
@@ -145,6 +156,40 @@ export function DocumentsWorkspace() {
       );
     } finally {
       setDeletingId(null);
+      mutating.current = false;
+    }
+  }
+
+  async function extractDocument(id: string) {
+    if (mutating.current) return;
+    mutating.current = true;
+    const controller = new AbortController();
+    extractionRequest.current = controller;
+    setExtractingId(id);
+    setExtraction(null);
+    setError(null);
+    setSuccess(null);
+    setConfirmDeleteId(null);
+    try {
+      const response = await fetch("/api/documents/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const body = await readResponse<ExtractionResponse>(response);
+      if (!controller.signal.aborted) setExtraction(body);
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Text extraction could not be completed. Try again.",
+        );
+      }
+    } finally {
+      if (!controller.signal.aborted) setExtractingId(null);
       mutating.current = false;
     }
   }
@@ -210,6 +255,11 @@ export function DocumentsWorkspace() {
       {uploading && (
         <p role="status" className="mt-4 text-sm text-emerald-800">
           Uploading your PDF to private storage…
+        </p>
+      )}
+      {extractingId && (
+        <p role="status" className="mt-4 text-sm text-emerald-800">
+          Reading your private PDF and extracting text locally…
         </p>
       )}
       {error && (
@@ -343,15 +393,28 @@ export function DocumentsWorkspace() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={busy || loadingList}
-                          onClick={() => setConfirmDeleteId(document.id)}
-                          aria-label={`Delete ${document.name}`}
-                          className="text-xs font-semibold text-red-700 disabled:opacity-50"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex min-w-40 flex-wrap gap-4">
+                          <button
+                            type="button"
+                            disabled={busy || loadingList}
+                            onClick={() => void extractDocument(document.id)}
+                            aria-label={`Extract text from ${document.name}`}
+                            className="text-xs font-semibold text-emerald-800 disabled:opacity-50"
+                          >
+                            {extractingId === document.id
+                              ? "Extracting…"
+                              : "Extract text"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy || loadingList}
+                            onClick={() => setConfirmDeleteId(document.id)}
+                            aria-label={`Delete ${document.name}`}
+                            className="text-xs font-semibold text-red-700 disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -373,9 +436,15 @@ export function DocumentsWorkspace() {
           </div>
         )}
       </section>
+      {extraction && (
+        <ExtractionPreview
+          result={extraction}
+          onClose={() => setExtraction(null)}
+        />
+      )}
       <p className="mt-6 text-xs leading-5 text-slate-400">
-        PDFs are stored privately. Document search and answers with sources will
-        arrive in later phases.
+        PDFs are stored privately. Extract text to test local parsing. Document
+        search and answers with sources will arrive in later phases.
       </p>
     </>
   );

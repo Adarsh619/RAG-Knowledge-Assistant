@@ -31,7 +31,7 @@ function error(message: string, status: number) {
   return json({ error: message }, status);
 }
 
-function isSameOrigin(request: Request) {
+export function isSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   return (
     request.headers.get("sec-fetch-site") !== "cross-site" &&
@@ -39,7 +39,7 @@ function isSameOrigin(request: Request) {
   );
 }
 
-class InputError extends Error {
+export class InputError extends Error {
   status: number;
   constructor(message: string, status: number) {
     super(message);
@@ -48,7 +48,7 @@ class InputError extends Error {
 }
 
 // Bound the actual body, including requests without a Content-Length header.
-async function readLimitedBody(request: Request, limit: number) {
+export async function readLimitedBody(request: Request, limit: number) {
   const declaredSize = Number(request.headers.get("content-length"));
   if (declaredSize > limit)
     throw new InputError("The upload request is too large.", 413);
