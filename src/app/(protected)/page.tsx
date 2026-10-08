@@ -46,7 +46,7 @@ export default function DashboardPage() {
             {
               label: "Documents",
               icon: "file",
-              note: "Your library starts in Phase 4",
+              note: "Upload and manage your private PDFs",
             },
             {
               label: "Conversations",
@@ -65,7 +65,9 @@ export default function DashboardPage() {
               <span>{item.label}</span>
               <Icon name={item.icon} className="text-slate-400" />
             </div>
-            <p className="mt-4 text-3xl font-semibold">0</p>
+            <p className="mt-4 text-3xl font-semibold">
+              {item.label === "Documents" ? "PDFs" : "0"}
+            </p>
             <p className="mt-2 text-xs text-slate-400">{item.note}</p>
           </div>
         ))}
@@ -85,10 +87,10 @@ export default function DashboardPage() {
             <span className="mb-4 rounded-2xl bg-slate-50 p-4 text-slate-400">
               <Icon name="file" width="28" height="28" />
             </span>
-            <h3 className="text-sm font-semibold">A fresh page</h3>
+            <h3 className="text-sm font-semibold">Your private PDF library</h3>
             <p className="mt-2 max-w-xs text-xs leading-5 text-slate-500">
-              Your PDFs will appear here once document upload is connected in
-              Phase 4.
+              Upload, view your file list, and delete PDFs on the Documents
+              page.
             </p>
           </div>
         </section>
@@ -118,8 +120,9 @@ export default function DashboardPage() {
         </section>
       </div>
       <p className="mt-6 text-xs leading-5 text-slate-400">
-        UI preview · The counts above are empty-state placeholders. No documents
-        or conversations are stored yet. Chat runs locally in mock mode.
+        Manage stored PDFs on the Documents page. Conversation history and
+        document indexing will arrive in later phases. Chat runs locally in mock
+        mode.
       </p>
     </>
   );

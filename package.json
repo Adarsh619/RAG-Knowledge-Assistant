@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:chat": "node --conditions=react-server --test scripts/check-chat.mjs",
-    "test:auth": "node --conditions=react-server --test scripts/check-auth.mjs"
+    "test:auth": "node --conditions=react-server --test scripts/check-auth.mjs",
+    "test:storage": "node --conditions=react-server --test scripts/check-storage.mjs",
+    "test:storage:fixtures": "node scripts/create-storage-test-files.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

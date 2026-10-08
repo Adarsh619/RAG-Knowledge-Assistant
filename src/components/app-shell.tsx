@@ -65,9 +65,9 @@ export function AppShell({
               Built to learn, step by step.
             </span>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Phase 03 · Authentication
+              Phase 04 · Private PDF storage
               <br />
-              Your workspace is protected. Chat stays in mock mode.
+              Store your PDFs privately. Chat stays in mock mode.
             </p>
           </div>
           <div className="mt-5 flex items-center gap-3 px-2">
@@ -96,7 +96,7 @@ export function AppShell({
           </span>
           <div className="flex items-center gap-4">
             <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 sm:block">
-              Phase 3 · Authenticated
+              Phase 4 · Private storage
             </span>
             <SignOutButton />
           </div>
