@@ -30,7 +30,8 @@ test("Phase 2 chat contract and zero outbound requests", async (t) => {
   syncBuiltinESMExports();
 
   try {
-    const { POST } = await import("../src/app/api/chat/route.ts");
+    const { handleChatRequest: POST } =
+      await import("../src/lib/ai/chat-handler.ts");
     const { getLlmMode, getLlmProvider } =
       await import("../src/lib/ai/provider.ts");
     const { mockProvider } = await import("../src/lib/ai/providers/mock.ts");

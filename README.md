@@ -1,19 +1,19 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 2 only — local mock chat without RAG.**
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 3 — Supabase authentication with the existing local mock chat.**
 
 ## Run locally
 
-The app requires Node.js 20.9 or newer and npm. The local test script uses Node.js 24's built-in TypeScript support; this project is validated with Node.js 24.13.0. The foundation uses Next.js 15.5.26 (App Router), React 19, and Tailwind CSS 4.
+Use Node.js 24 and npm for the app and local tests. Current Supabase libraries require Node.js 22 or newer, and the test scripts use Node.js 24's built-in TypeScript support. This project is validated with Node.js 24.13.0. The foundation uses Next.js 15.5.26 (App Router), React 19, and Tailwind CSS 4.
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000/chat, or the URL printed by Next.js if that port is occupied. Stop a production preview on the same port before starting development.
+Open http://localhost:3000/login, or the URL printed by Next.js if that port is occupied. Stop a production preview on the same port before starting development.
 
-No API key, billing account, credits, or payment method is needed. If `LLM_MODE` is unset or blank, the server defaults to `mock`. To make configuration explicit, create a `.env.local` file containing only:
+No LLM API key, credits, or payment method is needed. Supabase authentication uses the existing Free-plan project URL and public publishable key in `.env.local`. The exact names are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; do not use a private secret/service-role key. If `LLM_MODE` is unset or blank, chat defaults to `mock`. Preserve existing local values and keep:
 
 ```dotenv
 LLM_MODE=mock
@@ -27,12 +27,13 @@ LLM_MODE=mock
 - `/chat`: working local message submission, user and assistant bubbles, a loading state, error messages, and a clearly labeled mock response.
 - `/documents`: the Phase 1 empty library and disabled upload UI.
 - Shared responsive navigation, active-page indication, and skip-to-content link.
+- `/login` and `/signup`: email/password authentication; application pages and the chat API now require a verified session.
 
 Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current message; mock responses do not reason over previous messages.
 
-Messages live in React state only. Refreshing or leaving the chat clears them. Nothing is written to a database, browser storage, or file. Document uploads, auth, embeddings, retrieval, RAG, citations, and conversation persistence are outside this phase.
+Chat messages live in React state only. Refreshing or leaving the chat clears them. Chat content is not written to a database, browser storage, or file. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. Document uploads, embeddings, retrieval, RAG, citations, and conversation persistence remain outside this phase.
 
-## Files created or modified in Phase 2
+## Files created or modified in Phase 2 (historical locations)
 
 Created:
 
@@ -63,13 +64,14 @@ README.md                            Setup, architecture, verification
 
 The existing `.gitignore` already ignores `.env.local`; it needed no changes. `server-only` is a tiny build-time boundary marker, not an AI SDK. No OpenAI SDK or RAG framework was added.
 
-The folders `src/lib/supabase/` and `src/lib/rag/` remain the Phase 1 placeholders. No integration has been implemented there.
+The Supabase folder now contains Phase 3 authentication utilities. `src/lib/rag/` remains a placeholder.
 
-## Final request/response flow
+## Chat request/response flow
 
 ```text
 ChatWorkspace (browser)
   → POST /api/chat with { message }
+  → Middleware and route verify the authenticated user
   → API validates JSON, trims text, checks length
   → getLlmProvider() selects from server-side LLM_MODE
   → mockProvider.reply(message) generates a local string
@@ -101,7 +103,7 @@ Validation failures return HTTP 400 with `{ "error": "..." }`. Disabled/unsuppor
 
 ## Important code
 
-`app/chat/page.tsx` remains a Server Component. It reads the selected mode and provider availability on each request (`force-dynamic`) and passes only those non-secret values to `ChatWorkspace`. This also makes the status reflect runtime configuration when using a production build.
+`app/(protected)/chat/page.tsx` remains a Server Component. It reads the selected mode and provider availability on each request (`force-dynamic`) and passes only those non-secret values to `ChatWorkspace`. This also makes the status reflect runtime configuration when using a production build.
 
 `ChatWorkspace` is a Client Component because it manages draft text, messages, loading, and errors with React state. `sending.current` blocks double submission before React has updated the button. React renders message text as text; it does not execute HTML from a message.
 
@@ -140,7 +142,7 @@ npm run test:chat
 npm run build
 ```
 
-`test:chat` runs the actual route and providers in-process, using Node.js 24. It blocks fetch, HTTP, HTTPS, TCP, and TLS before testing. It checks default/explicit mock mode, a dummy key, input validation, disabled OpenAI mode, unknown configuration, and safe provider errors. It asserts **zero attempted outbound requests**, not just zero successful requests. No real key is used for these tests.
+`test:chat` runs the pure chat handler and providers in-process, using Node.js 24. It blocks fetch, HTTP, HTTPS, TCP, and TLS before testing. It checks default/explicit mock mode, a dummy key, input validation, disabled OpenAI mode, unknown configuration, and safe provider errors. It asserts **zero attempted outbound requests**, not just zero successful requests. No real key is used for these tests.
 
 After building, use `npm start` to serve the production app. Do not run a build and a development server against the same `.next` directory at the same time.
 
@@ -161,8 +163,8 @@ Manual checks:
 Phase 2 verification completed: TypeScript, lint with zero warnings, production build, and all eight local tests passed. Browser checks verified button/Enter submission, multiple mock replies, loading, whitespace prevention, refresh clearing, network error/draft recovery, and mobile/desktop layouts. The built app returned `mode: mock` in a real localhost request and returned 503 with a disabled composer when configured as `openai`. The validation guards observed zero outbound network attempts, and the provider source contains no working external LLM call. No OpenAI API usage was generated by this project or these checks. The final preview was restored to mock mode.
 
 1. Project foundation and UI structure — completed
-2. Basic chat architecture without RAG, local mock provider — current phase
-3. Supabase authentication — not started
+2. Basic chat architecture without RAG, local mock provider — completed
+3. Supabase authentication — completed
 4. PDF upload and Supabase Storage
 5. PDF text extraction
 6. Document chunking and metadata
@@ -174,4 +176,117 @@ Phase 2 verification completed: TypeScript, lint with zero warnings, production 
 12. Conversation history and document management
 13. Error handling, security, UI improvements, and Vercel deployment
 
-**Stop after reviewing and testing Phase 2. Phase 3 requires a separate instruction.** No LangChain, LangGraph, agents, or RAG frameworks are used.
+**Stop after reviewing and testing Phase 3. Phase 4 requires a separate instruction.** No LangChain, LangGraph, agents, or RAG frameworks are used.
+
+## Phase 3 authentication
+
+The public routes are `/login`, `/signup`, and `/auth/callback`. The dashboard, `/chat`, and `/documents` now live in `src/app/(protected)/` and require a signed-in user. Route-group names in parentheses do not appear in URLs. Root layout supplies HTML/global styling, the auth layout supplies a focused form, and the protected layout supplies the existing dashboard shell.
+
+Authentication flow:
+
+```text
+Browser signup/signin form
+  → Supabase Auth using the project URL + publishable key
+  → Session cookies managed by @supabase/ssr
+  → Next.js middleware verifies/refreshes the session
+  → Protected layout confirms the user with getUser()
+  → Dashboard/chat/documents
+  → Browser signOut({ scope: "local" })
+  → Session removed from this browser → login
+```
+
+With email confirmation enabled, sign-up shows a check-email success state instead of pretending the user is signed in. The confirmation link returns to `/auth/callback`; its one-time PKCE code is exchanged for session cookies. The same browser must hold the verifier cookie from sign-up. The default Supabase email template works with this flow; template customization is not required.
+
+The project URL selects the Supabase instance. The publishable key is designed for public applications; it does not grant service-role privileges or substitute for a user session. Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are used. No secret, service-role, or legacy anon key is used. No private key or password is stored in source or documentation.
+
+The browser runs email/password form submission and sign-out, and displays pending, success, and error states. The SDK manages cookie storage. Server middleware runs `getClaims()` to verify identity and refresh expiring tokens. Both the request and response receive refreshed cookies. `getUser()` runs in the protected layout and chat API to get a server-confirmed user. No authorization decision trusts `getSession()` or user-editable metadata. Auth responses are marked private/no-store, and redirects preserve cookie/cache headers.
+
+The chat API now rejects unauthenticated requests before entering `src/lib/ai/chat-handler.ts`. This is the former Phase 2 handler, separated so its cost protection can still be tested with all network calls blocked. Authentication may contact the Supabase Auth service; the LLM provider remains local. No OpenAI implementation was enabled.
+
+### Supabase Free setup
+
+1. Keep the existing project on Free; no upgrade or paid add-on is required or enabled.
+2. Keep the two real public configuration values only in the ignored `.env.local` file. The `.env.example` values stay empty. Preserve `LLM_MODE=mock` and the empty `OPENAI_API_KEY`.
+3. Use Supabase Auth → URL Configuration to set the development Site URL to `http://localhost:3000` and allow `http://localhost:3000/**`. If you use `127.0.0.1` instead, allow `http://127.0.0.1:3000/**` as well. Use a consistent hostname throughout a sign-up/confirmation flow.
+4. Keep email/password authentication and email confirmation enabled. Use your organization member email for the live check: the default sender only sends to project team addresses and has a small rate limit. No custom SMTP provider is required for this learning phase. See [Supabase email guidance](https://supabase.com/docs/guides/auth/auth-smtp).
+5. Do not customize templates or turn on paid auth features. New Free projects using the default sender cannot customize templates, and this implementation does not need them. See [the template policy](https://supabase.com/changelog/46599-changes-to-email-template-customisation-on-free-tier).
+
+The existing local configuration was found as `.env.local.txt` and renamed to `.env.local`. Its content hash was verified unchanged. No values were printed. Git confirmed `.env.local` is ignored and untracked.
+
+### Phase 3 file inventory
+
+Created:
+
+```text
+src/lib/supabase/config.ts                  Public configuration validation
+src/lib/supabase/client.ts                  Browser cookie client
+src/lib/supabase/server.ts                  Server cookie client/current user
+src/lib/supabase/middleware.ts              Refresh and route decisions
+src/lib/auth/redirect.ts                    Safe local return destinations
+src/middleware.ts                          Next.js 15 middleware entry point
+src/components/auth/auth-form.tsx           Sign-up/sign-in states and requests
+src/components/auth/resend-confirmation-form.tsx  Fresh confirmation link recovery
+src/components/auth/sign-out-button.tsx     Sign-out states and request
+src/app/(auth)/layout.tsx                   Public form layout
+src/app/(auth)/login/page.tsx               Sign-in page
+src/app/(auth)/signup/page.tsx              Sign-up page
+src/app/(protected)/layout.tsx              Verified-user guard + app shell
+src/app/auth/callback/route.ts              Confirmation code exchange
+src/lib/ai/chat-handler.ts                  Existing pure mock chat handler
+scripts/check-auth.mjs                      Offline SDK/middleware checks
+```
+
+Moved without changing page URLs or page UI:
+
+```text
+src/app/page.tsx            → src/app/(protected)/page.tsx
+src/app/chat/page.tsx       → src/app/(protected)/chat/page.tsx
+src/app/documents/page.tsx  → src/app/(protected)/documents/page.tsx
+```
+
+Modified: `src/app/layout.tsx`, `src/components/app-shell.tsx`, `src/app/api/chat/route.ts`, `scripts/check-chat.mjs`, `package.json`, `package-lock.json`, `.env.example`, `src/lib/supabase/README.md`, and `README.md`. The local-only environment file was renamed, not edited. `.gitignore`, AI providers, and RAG placeholders required no changes.
+
+The official packages are pinned to `@supabase/supabase-js` 2.117.3 and `@supabase/ssr` 0.12.7 in the lockfile. No application/profile tables, migrations, buckets, Storage calls, PDF features, embeddings, vectors, or RAG were added.
+
+### Verify Phase 3
+
+```powershell
+npm run typecheck
+npm run lint -- --max-warnings=0
+npm run test:chat
+npm run test:auth
+npm run build
+```
+
+The auth tests use the actual SDK and middleware with an offline fake Auth service. They verify confirmation-required sign-up, PKCE confirmation resend and rate-limit errors, invalid credentials, cookie persistence, signed-in/out route behavior, safe redirects, token verification, refresh, and sign-out. Every fixture request is intercepted before network I/O; no real user or real project is used. The chat checks continue to assert zero outbound attempts from the LLM handler.
+
+Live checklist (enter account credentials directly in the app, never in chat):
+
+1. Signed out: visit `/`, `/chat`, and `/documents`; each must redirect to login. `/api/chat` must return JSON 401.
+2. Sign up using the project team email. Confirm email if required; open the link in the same browser. Verify the success/pending state.
+3. Sign in. You should return to the intended page, such as `/chat`.
+4. Enter invalid credentials once. Confirm an error, ended loading, and enabled form.
+5. Refresh while signed in. Access should remain authenticated.
+6. Navigate to all three protected pages. They should render and show a Sign out control.
+7. Send a chat message. Verify the mock badge and `mode: mock` in the local response. No LLM-domain request should occur.
+8. Sign out, then retry the protected URLs and browser Back. Protected content should not remain accessible.
+
+Successful live sign-up/sign-in and account-session tests require the user to enter their password and complete any email verification. Offline fixture results must not be described as a completed live account check. Read-only public route checks and invalid-login checks can be performed independently.
+
+### Recover an expired confirmation link
+
+Try signing in first: a previously consumed link may have already confirmed the email. If sign-in says the email is unconfirmed, expand **Resend confirmation email** on `/login`, enter the account email directly in the app, and request a fresh link once. Use only the newest email and open its link in the same browser/profile and on the same hostname used for the resend. The SDK supplies a new PKCE challenge/verifier, and `/auth/callback` exchanges the resulting code. Do not share the confirmation URL or its tokens.
+
+The resend form has a 60-second retry cooldown; Supabase independently enforces its sender limits, including an hourly limit. No email is sent automatically. Check Auth → URL Configuration for the local callback allowlist if the link redirects to the wrong page. Repeatedly requesting emails can invalidate older links and reach the sender limit.
+
+Email security scanners can consume one-time links before you click them, producing an invalid/expired error. If this repeats, check the account's confirmation status in Supabase Auth → Users and try signing in. See [Supabase's email prefetch guidance](https://supabase.com/docs/guides/auth/auth-email-templates#email-prefetching). Email confirmation stays enabled; this phase requires no paid sender or template customization.
+
+### Phase 3 verification results
+
+TypeScript, lint with zero warnings, the production build, all 17 offline auth tests, and all eight chat tests passed. The user created the live account and received the confirmation email. Although the confirmation link reported invalid/expired, signing in with the existing account succeeded; the account was confirmed. The exact cause of the link error was not established.
+
+Browser checks verified authenticated access to `/`, `/documents`, and `/chat`; session persistence after dashboard/chat refresh; a signed-in `/login?next=/chat` redirect; and an authenticated request producing the explicit local mock reply. Sign-out returned to login, browser Back did not reveal protected content, and `/documents` again redirected to login. Signed-out page/API/callback behavior and live invalid-credentials handling were also verified. Confirmation resend is validated offline without consuming another live email quota.
+
+The chat provider still makes no external LLM request. Its network-blocking tests observed zero attempts, and OpenAI remains disabled. Only basic Supabase Auth was used in live authentication checks; no paid add-on or paid API was used or enabled by this implementation.
+
+References: [SSR clients and session verification](https://supabase.com/docs/guides/auth/server-side/creating-a-client), [password authentication](https://supabase.com/docs/guides/auth/passwords), [publishable keys](https://supabase.com/docs/guides/getting-started/api-keys).
