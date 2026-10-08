@@ -58,9 +58,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               Built to learn, step by step.
             </span>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Phase 01 · Foundation
+              Phase 02 · Local chat
               <br />
-              AI and document processing come next.
+              Mock responses are ready. Document processing comes later.
             </p>
           </div>
           <div className="mt-5 flex items-center gap-3 px-2">
@@ -86,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </span>
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800">
-            Phase 1 preview
+            Phase 2 · Local development
           </span>
         </header>
         <main

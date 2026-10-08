@@ -1,91 +1,168 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 1 only.**
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 2 only — local mock chat without RAG.**
 
 ## Run locally
 
-Requires Node.js 20.9 or newer and npm. This project was set up using Node.js 24. The foundation uses Next.js 15.5.26 (App Router), React 19, and Tailwind CSS 4. Next.js 15 and its matching Windows compiler were available in the local npm cache; using this supported release avoided repeated network failures downloading Next.js 16.
+The app requires Node.js 20.9 or newer and npm. The local test script uses Node.js 24's built-in TypeScript support; this project is validated with Node.js 24.13.0. The foundation uses Next.js 15.5.26 (App Router), React 19, and Tailwind CSS 4.
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000. If that port is already used, use the URL printed by Next.js.
+Open http://localhost:3000/chat, or the URL printed by Next.js if that port is occupied. Stop a production preview on the same port before starting development.
 
-No environment variables, Supabase account, or AI API keys are required for Phase 1.
+No API key, billing account, credits, or payment method is needed. If `LLM_MODE` is unset or blank, the server defaults to `mock`. To make configuration explicit, create a `.env.local` file containing only:
+
+```dotenv
+LLM_MODE=mock
+```
+
+`.env.example` includes this setting and an empty `OPENAI_API_KEY` placeholder. `.gitignore` excludes `.env.local` and all other `.env*` files except the example. Never paste a key into a chat, source file, README, or Git. Restart the server after changing environment settings.
 
 ## What works now
 
-- `/`: dashboard with empty workspace counts and links to chat/documents.
-- `/chat`: chat layout, example question categories, and a disabled composer.
-- `/documents`: upload layout and empty document library.
-- Shared navigation with active-page indication, responsive layout, and a skip-to-content link.
+- `/`: the Phase 1 dashboard and placeholder counts.
+- `/chat`: working local message submission, user and assistant bubbles, a loading state, error messages, and a clearly labeled mock response.
+- `/documents`: the Phase 1 empty library and disabled upload UI.
+- Shared responsive navigation, active-page indication, and skip-to-content link.
 
-The counts are placeholders, not database queries. Upload, message sending, authentication, AI responses, citations, and persistence are not implemented. Disabled controls identify the phase in which they become available.
+Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current message; mock responses do not reason over previous messages.
 
-## Folder structure
+Messages live in React state only. Refreshing or leaving the chat clears them. Nothing is written to a database, browser storage, or file. Document uploads, auth, embeddings, retrieval, RAG, citations, and conversation persistence are outside this phase.
+
+## Files created or modified in Phase 2
+
+Created:
 
 ```text
-src/
-  app/
-    layout.tsx                 Root HTML, metadata, and shared shell
-    globals.css                Tailwind import, theme, and shared styles
-    page.tsx                   Dashboard route
-    chat/page.tsx              Chat route
-    documents/page.tsx         Documents route
-  components/
-    app-shell.tsx              Shared navigation and responsive frame
-    page-header.tsx            Consistent page headings
-    ui/icon.tsx                Reusable SVG icons
-  lib/
-    supabase/README.md         Future auth/database/storage integration
-    ai/README.md               Future server-side LLM/embedding integration
-    rag/README.md              Future manual ingestion/retrieval pipeline
-  types/README.md              Future shared domain types
+.env.example                          Safe configuration placeholders
+src/types/chat.ts                     Shared chat/provider contracts
+src/lib/ai/provider.ts                Server-side provider selection
+src/lib/ai/providers/mock.ts          Active local response implementation
+src/lib/ai/providers/openai.ts        Disabled future integration point
+src/app/api/chat/route.ts             POST /api/chat
+src/components/chat/chat-workspace.tsx Interactive chat UI
+scripts/check-chat.mjs                Local contract and no-network checks
 ```
 
-`package.json` defines scripts and dependency ranges; `package-lock.json` records the installed versions for reproducibility. `tsconfig.json` enables strict TypeScript and maps `@/` imports to `src/`. `next.config.ts` starts with default Next.js behavior. `postcss.config.mjs` connects Tailwind v4 to the CSS build. Tailwind v4 uses the CSS import and `@theme` here, so there is no separate Tailwind configuration file. `eslint.config.mjs` enables Next.js and TypeScript checks.
+Modified:
 
-## Important code and architecture
+```text
+src/app/chat/page.tsx                 Server configuration + chat component
+src/components/app-shell.tsx          Phase 2 labels
+src/app/page.tsx                      Dashboard note about mock chat
+src/lib/ai/README.md                  Provider integration notes
+src/types/README.md                   Shared types explanation
+package.json                         server-only, test script, ESM module type
+package-lock.json                    Dependency lockfile
+tsconfig.json                        Explicit .ts import support for local tests
+README.md                            Setup, architecture, verification
+```
 
-Next.js App Router maps `app/page.tsx` to `/`, `app/chat/page.tsx` to `/chat`, and `app/documents/page.tsx` to `/documents`. `app/layout.tsx` wraps all three, so navigation stays consistent when switching pages.
+The existing `.gitignore` already ignores `.env.local`; it needed no changes. `server-only` is a tiny build-time boundary marker, not an AI SDK. No OpenAI SDK or RAG framework was added.
 
-Pages are Server Components by default. `AppShell` is a Client Component because it uses `usePathname()` to highlight the current route. Passing the server-rendered pages as `children` preserves that boundary; the pages do not need a `"use client"` directive.
+The folders `src/lib/supabase/` and `src/lib/rag/` remain the Phase 1 placeholders. No integration has been implemented there.
 
-`PageHeader` demonstrates reusable presentation with typed props. `Icon` draws local SVG paths, avoiding an extra icon dependency. Tailwind utilities handle spacing, colors, and responsive breakpoints. At `lg`, navigation becomes a sidebar; on smaller screens it sits above the content.
+## Final request/response flow
 
-The `lib` folders currently contain documentation only. We will add integrations when their phases begin, rather than installing unused SDKs or writing speculative functions. Future API handlers can live under `src/app/api/` and call server-side functions from these folders. AI secrets must stay on the server.
+```text
+ChatWorkspace (browser)
+  → POST /api/chat with { message }
+  → API validates JSON, trims text, checks length
+  → getLlmProvider() selects from server-side LLM_MODE
+  → mockProvider.reply(message) generates a local string
+  → API returns { mode, message: { role, content } }
+  → ChatWorkspace appends the assistant bubble
+```
 
-## Verify Phase 1
+The browser's only application request for a reply is a relative `fetch("/api/chat")`, so it goes to the same Next.js server. The browser does not choose a provider or receive a key.
+
+Example request:
+
+```json
+{ "message": "Hello, backend!" }
+```
+
+Example success response (content shortened):
+
+```json
+{
+  "mode": "mock",
+  "message": {
+    "role": "assistant",
+    "content": "Local mock response — no AI model was called. ..."
+  }
+}
+```
+
+Validation failures return HTTP 400 with `{ "error": "..." }`. Disabled/unsupported providers return 503. Unexpected provider failures return a generic 500 response, without stack traces or provider internals. The browser displays errors and clears the loading state, and a 15-second timeout prevents indefinite waiting.
+
+## Important code
+
+`app/chat/page.tsx` remains a Server Component. It reads the selected mode and provider availability on each request (`force-dynamic`) and passes only those non-secret values to `ChatWorkspace`. This also makes the status reflect runtime configuration when using a production build.
+
+`ChatWorkspace` is a Client Component because it manages draft text, messages, loading, and errors with React state. `sending.current` blocks double submission before React has updated the button. React renders message text as text; it does not execute HTML from a message.
+
+`LlmProvider` defines `mode`, `enabled`, and `reply(message): Promise<string>`. The API uses this contract rather than depending on an external service. Shared types live in `src/types/chat.ts`, which is safe to import in both client and server code.
+
+All provider modules import `server-only`. Next.js rejects importing these modules into a Client Component, helping keep future provider secrets on the server. Explicit `.ts` import paths allow Node.js 24 to execute the source in the local validation script; `allowImportingTsExtensions` enables them in this no-emit TypeScript project.
+
+The mock's 600 ms delay is a local timer that makes loading visible. Its response echoes the submitted message and explicitly identifies itself as a development confirmation. It does not claim to answer a question using AI.
+
+## Why this cannot create OpenAI usage
+
+- Missing/blank `LLM_MODE` defaults to `mock`.
+- A key's presence never selects a provider. Application code does not read `OPENAI_API_KEY` yet.
+- `mock.ts` contains no HTTP call or SDK call.
+- `openai.ts` has `enabled: false` and a `reply()` that throws without network access.
+- The API checks availability before calling `reply()`. `LLM_MODE=openai` returns 503 even if a key exists.
+- Unsupported modes return an error instead of falling back to another provider.
+- There is no OpenAI SDK, external LLM endpoint, or working external LLM request path in Phase 2.
+
+Actual OpenAI model usage would require an authenticated request to a model endpoint, such as an SDK generation call. Setting an environment variable, defining an interface, reading documentation, or returning a local mock string does not generate model usage.
+
+API keys belong on the server because browser JavaScript and requests are inspectable. See [OpenAI's official API guidance](https://developers.openai.com/api/reference/overview). Future keys must use server environment variables, never a `NEXT_PUBLIC_` variable.
+
+## How OpenAI can be enabled later
+
+Only after an explicit decision to allow real API usage: implement the OpenAI module's `reply()` with a server-side SDK call and error handling, deliberately set that provider's `enabled` flag to true, and configure `LLM_MODE=openai`. Read `OPENAI_API_KEY` only inside the server module. The UI and API contract already support both provider names and availability; their structure does not need to change.
+
+**Changing `LLM_MODE` alone does not enable OpenAI in this phase.** Do not run an OpenAI connectivity test. Keep `LLM_MODE=mock` for zero-charge development.
+
+## Verify Phase 2
 
 ```powershell
-npm run lint
 npm run typecheck
+npm run lint -- --max-warnings=0
+npm run test:chat
 npm run build
 ```
 
-After a successful build, `npm start` serves the production app locally. Stop an existing development server first if it uses the same port.
+`test:chat` runs the actual route and providers in-process, using Node.js 24. It blocks fetch, HTTP, HTTPS, TCP, and TLS before testing. It checks default/explicit mock mode, a dummy key, input validation, disabled OpenAI mode, unknown configuration, and safe provider errors. It asserts **zero attempted outbound requests**, not just zero successful requests. No real key is used for these tests.
 
-Manual review checklist:
+After building, use `npm start` to serve the production app. Do not run a build and a development server against the same `.next` directory at the same time.
 
-1. Open `/`, `/chat`, and `/documents` using the navigation links. Confirm the active item updates and the browser Back button works.
-2. Refresh each URL directly. Each page should load successfully.
-3. Review the dashboard and follow its Open chat and View library links.
-4. Confirm the chat textarea, send button, and upload button are disabled and show their phase explanations.
-5. Resize to approximately 375 px wide and back to desktop. Confirm readable content, navigation, and no horizontal page overflow.
-6. Navigate with Tab. Check visible focus indicators and the skip-to-content link.
-7. Confirm there are no app errors in the terminal or browser console.
+Manual checks:
 
-**Review and test Phase 1 before authorizing Phase 2.**
+1. Open `/chat`. Confirm **Mock mode · no external LLM calls** appears.
+2. Submit `Hello, backend!`. Confirm a user bubble, local loading status, and an assistant reply beginning **Local mock response — no AI model was called**.
+3. Submit a second message with Enter. Confirm another reply. Use Shift+Enter to test a multiline draft.
+4. Try spaces only. The send button remains disabled.
+5. Refresh. The visible conversation should clear.
+6. In browser DevTools → Network, inspect the POST to `/api/chat`. Its response includes `"mode": "mock"`. This shows the server's selected provider. There should be no LLM-domain request from the browser.
+7. Review the server-only provider files and run `npm run test:chat` to check the server boundary; browser network logs alone do not show server-side requests.
+8. To exercise the network error UI, stop the local server after loading the page and send a message. Confirm an error appears, loading ends, and the draft is restored. Restart with mock mode before retrying.
+9. Optionally set only `LLM_MODE=openai` and restart. The page must show that the provider is disabled, and a local POST must return 503. No key is needed; this tests the block, not OpenAI connectivity. Return to `LLM_MODE=mock` and restart.
 
-Implementation verification completed: TypeScript checks, ESLint with zero warnings, and the production build passed. Browser checks covered navigation, direct route reloads, disabled chat/upload controls, and layouts at 375 px and 1280 px. No browser warnings or errors were observed during those checks.
+## Development phases
 
-## Planned phases
+Phase 2 verification completed: TypeScript, lint with zero warnings, production build, and all eight local tests passed. Browser checks verified button/Enter submission, multiple mock replies, loading, whitespace prevention, refresh clearing, network error/draft recovery, and mobile/desktop layouts. The built app returned `mode: mock` in a real localhost request and returned 503 with a disabled composer when configured as `openai`. The validation guards observed zero outbound network attempts, and the provider source contains no working external LLM call. No OpenAI API usage was generated by this project or these checks. The final preview was restored to mock mode.
 
-1. Project foundation and UI structure — current phase
-2. Basic LLM chatbot without RAG
-3. Supabase authentication
+1. Project foundation and UI structure — completed
+2. Basic chat architecture without RAG, local mock provider — current phase
+3. Supabase authentication — not started
 4. PDF upload and Supabase Storage
 5. PDF text extraction
 6. Document chunking and metadata
@@ -97,4 +174,4 @@ Implementation verification completed: TypeScript checks, ESLint with zero warni
 12. Conversation history and document management
 13. Error handling, security, UI improvements, and Vercel deployment
 
-No LangChain, LangGraph, agents, or RAG frameworks are used.
+**Stop after reviewing and testing Phase 2. Phase 3 requires a separate instruction.** No LangChain, LangGraph, agents, or RAG frameworks are used.

@@ -119,7 +119,7 @@ export default function DashboardPage() {
       </div>
       <p className="mt-6 text-xs leading-5 text-slate-400">
         UI preview · The counts above are empty-state placeholders. No documents
-        or conversations are stored yet.
+        or conversations are stored yet. Chat runs locally in mock mode.
       </p>
     </>
   );
