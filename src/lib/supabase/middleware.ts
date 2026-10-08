@@ -45,7 +45,9 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (
     !signedIn &&
-    (pathname === "/api/chat" || pathname === "/api/documents")
+    (pathname === "/api/chat" ||
+      pathname === "/api/documents" ||
+      pathname.startsWith("/api/documents/"))
   ) {
     return withSessionCookies(
       NextResponse.json(
