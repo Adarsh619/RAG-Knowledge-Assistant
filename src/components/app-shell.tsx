@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 const navigation = [
   { href: "/", label: "Overview", icon: "grid" },
@@ -11,7 +12,13 @@ const navigation = [
   { href: "/documents", label: "Documents", icon: "file" },
 ] as const;
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  userEmail,
+}: {
+  children: ReactNode;
+  userEmail: string;
+}) {
   const pathname = usePathname();
 
   return (
@@ -58,9 +65,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               Built to learn, step by step.
             </span>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Phase 02 · Local chat
+              Phase 03 · Authentication
               <br />
-              Mock responses are ready. Document processing comes later.
+              Your workspace is protected. Chat stays in mock mode.
             </p>
           </div>
           <div className="mt-5 flex items-center gap-3 px-2">
@@ -68,9 +75,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               LW
             </span>
             <div>
-              <p className="text-xs font-semibold">Local workspace</p>
+              <p className="max-w-36 truncate text-xs font-semibold">
+                {userEmail}
+              </p>
               <p className="mt-1 text-[11px] text-slate-400">
-                Authentication in Phase 3
+                Authenticated workspace
               </p>
             </div>
           </div>
@@ -85,9 +94,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 "Page"}
             </span>
           </span>
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800">
-            Phase 2 · Local development
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 sm:block">
+              Phase 3 · Authenticated
+            </span>
+            <SignOutButton />
+          </div>
         </header>
         <main
           id="main-content"
