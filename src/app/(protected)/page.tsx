@@ -56,7 +56,7 @@ export default function DashboardPage() {
             {
               label: "Indexed chunks",
               icon: "grid",
-              note: "Processing starts in Phase 5",
+              note: "Inspect temporary chunks in Documents",
             },
           ] as const
         ).map((item) => (
@@ -89,8 +89,8 @@ export default function DashboardPage() {
             </span>
             <h3 className="text-sm font-semibold">Your private PDF library</h3>
             <p className="mt-2 max-w-xs text-xs leading-5 text-slate-500">
-              Upload, preview extracted text, and delete PDFs on the Documents
-              page.
+              Upload PDFs, preview extracted text and chunks, and manage your
+              library on the Documents page.
             </p>
           </div>
         </section>
@@ -120,9 +120,9 @@ export default function DashboardPage() {
         </section>
       </div>
       <p className="mt-6 text-xs leading-5 text-slate-400">
-        Manage stored PDFs and preview their text on the Documents page.
-        Conversation history and document indexing will arrive in later phases.
-        Chat runs locally in mock mode.
+        Manage stored PDFs and inspect their text and chunks on the Documents
+        page. Conversation history and document indexing will arrive in later
+        phases. Chat runs locally in mock mode.
       </p>
     </>
   );

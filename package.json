@@ -14,7 +14,9 @@
     "test:storage": "node --conditions=react-server --test scripts/check-storage.mjs",
     "test:storage:fixtures": "node scripts/create-storage-test-files.mjs",
     "test:pdf": "node --conditions=react-server --test scripts/check-pdf.mjs",
-    "test:pdf:fixtures": "node scripts/create-extraction-test-files.mjs"
+    "test:pdf:fixtures": "node scripts/create-extraction-test-files.mjs",
+    "test:chunking": "node --conditions=react-server --test scripts/check-chunking.mjs",
+    "test:chunking:fixtures": "node scripts/create-chunking-test-files.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",

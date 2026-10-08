@@ -1,6 +1,6 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 5 — server-side PDF text extraction, with private Storage, authentication, and local mock chat.**
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 6 — local document chunking and metadata, with PDF extraction, private Storage, authentication, and local mock chat.**
 
 ## Run locally
 
@@ -25,13 +25,13 @@ LLM_MODE=mock
 
 - `/`: dashboard with links to the private library; conversation/index counts remain placeholders.
 - `/chat`: working local message submission, user and assistant bubbles, a loading state, error messages, and a clearly labeled mock response.
-- `/documents`: private PDF upload, persistent file listing, name/size/date metadata, owner deletion, and local text extraction with a small page-aware preview.
+- `/documents`: private PDF upload, persistent file listing, name/size/date metadata, owner deletion, and local text extraction with a page-aware preview and chunk inspector.
 - Shared responsive navigation, active-page indication, and skip-to-content link.
 - `/login` and `/signup`: email/password authentication; application pages, chat API, and document API require a verified session.
 
 Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current message; mock responses do not reason over previous messages.
 
-Chat messages live in React state only. Refreshing or leaving the chat clears them. Chat content is not written to a database, browser storage, or file. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. Extracted text exists only during the server request and in the Documents page's memory. OCR, chunking, embeddings, retrieval, RAG, citations, and conversation persistence remain outside this phase.
+Chat messages live in React state only. Refreshing or leaving the chat clears them. Chat content is not written to a database, browser storage, or file. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. Extracted text and chunks exist only during the server request and in the Documents page's memory. OCR, embeddings, retrieval, RAG, citations, and conversation persistence remain outside this phase.
 
 ## Files created or modified in Phase 2 (historical locations)
 
@@ -64,7 +64,7 @@ README.md                            Setup, architecture, verification
 
 The existing `.gitignore` already ignores `.env.local`; it needed no changes. `server-only` is a tiny build-time boundary marker, not an AI SDK. No OpenAI SDK or RAG framework was added.
 
-The Supabase folder now contains Phase 3 authentication utilities. `src/lib/rag/` remains a placeholder.
+The Supabase folder contains Phase 3 authentication utilities. `src/lib/rag/` now contains the Phase 6 manual chunking utility.
 
 ## Chat request/response flow
 
@@ -305,12 +305,12 @@ Objects use `user-id/random-uuid--sanitized-name.pdf`. The server obtains the us
 
 `supabase/storage/documents.sql` contains the exact setup applied to the existing development project. It creates the bucket and three policies on Supabase's existing `storage.objects` table:
 
-| Operation | Required conditions |
-| --- | --- |
-| INSERT/upload | `authenticated` role; `documents` bucket; first folder equals `auth.uid()`; `owner_id` equals `auth.uid()`; exactly one folder; safe generated PDF filename |
-| SELECT/list/read | `authenticated` role; same bucket; both first folder and `owner_id` equal `auth.uid()` |
-| DELETE | Same owner conditions as SELECT |
-| UPDATE/overwrite/move | No policy granted; uploads use `upsert: false` |
+| Operation             | Required conditions                                                                                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| INSERT/upload         | `authenticated` role; `documents` bucket; first folder equals `auth.uid()`; `owner_id` equals `auth.uid()`; exactly one folder; safe generated PDF filename |
+| SELECT/list/read      | `authenticated` role; same bucket; both first folder and `owner_id` equal `auth.uid()`                                                                      |
+| DELETE                | Same owner conditions as SELECT                                                                                                                             |
+| UPDATE/overwrite/move | No policy granted; uploads use `upsert: false`                                                                                                              |
 
 The app uses the publishable key and the normal user's session. Running a Storage request on the server does **not** bypass RLS. Bucket/policy provisioning uses the connected developer tool, not a service-role key in the application. Public file URLs and signed sharing URLs are not created. Do not add a broad permissive Storage policy later: permissive policies combine with OR and can undo owner isolation.
 
@@ -501,3 +501,89 @@ The user approved deletion of the four named generated Phase 5 fixtures through 
 One listing request failed and one upload returned a session error during live testing. Refresh and retry restored authenticated access and the requests succeeded; their underlying cause was not established. The error states remained usable and did not expose private service details.
 
 `LLM_MODE=mock` is still active, `OPENAI_API_KEY` remains empty, `.env.local` remains ignored, and existing environment values were neither changed nor printed. No OpenAI request or API usage was generated by this work. No paid external API, OCR service, Supabase upgrade, or paid add-on was used or enabled. No application table, extracted-text persistence, chunking, embeddings, vector feature, or RAG was added. Stop after Phase 5; Phase 6 requires a separate instruction.
+
+## Phase 6 — Document chunking and metadata
+
+RAG needs small, relevant passages: one vector for a whole PDF can blur unrelated topics and exceed an embedding model's input limit. Too-small chunks lose context, while too-large chunks reduce retrieval precision. Overlap repeats a small tail to preserve context across boundaries. Paragraph/sentence boundaries keep the passages readable. Page metadata will help future answers cite their sources.
+
+This phase adds a manual, server-only chunker with **1,200 maximum characters and up to 200 overlapping characters**. These are readable development defaults, not model token limits. They are exported configuration, and the utility accepts server-side overrides. No embedding model has been selected or called.
+
+### Extraction-to-chunking flow
+
+```text
+Authenticated user clicks Extract text on an existing PDF
+  → POST /api/documents/extract with only { id }
+  → Middleware and route verify the session
+  → Existing handler reconstructs the verified owner's private Storage path
+  → Normal authenticated Storage download, protected by owner SELECT policy
+  → Existing local PDF parser extracts physical pages
+  → Normalize page text, join nonempty pages, and record source-page spans
+  → Choose readable boundaries under the configured maximum
+  → Carry up to the configured overlap into each next chunk
+  → Return { document, extraction, chunking } with private, no-store caching
+  → Original text preview plus chunk inspector in temporary React state
+```
+
+The chunker prefers a paragraph boundary in the latter 40% of a window, then a sentence punctuation/whitespace boundary, then whitespace. If none exists there, an earlier boundary avoids cutting a fitting word. An unbroken token longer than the maximum needs a hard cut, recorded with `forcedWordSplit`. Cuts preserve Unicode surrogate pairs and never exceed the configured maximum. The sentence rule is a simple heuristic rather than linguistic parsing.
+
+Overlap is a target ceiling, not a promise to repeat exactly 200 characters. The next start moves to a whitespace boundary; it can reduce or drop overlap to avoid cutting a fitting word or repeating a window without new text. Chunk ends always advance, and all normalized text remains covered. Each exact slice retains its whitespace; it is not trimmed independently.
+
+Each chunk contains `chunkIndex` (zero-based), `documentId`, `text`, `characterCount`, `pageNumbers` (physical 1-based pages), `startOffset`, `endOffset` (excluded), `overlapWithPrevious`, and `forcedWordSplit`. A chunk spanning text on physical pages 1 and 3 lists `[1, 3]`, excluding a blank page 2. The document ID is the safe stored filename, without another owner's folder. Filename/display metadata remains in the response's `document` object.
+
+Normalization converts line endings, trims each page's outer whitespace, skips empty pages, and joins nonempty pages with two newlines. `sourceCharacterCount` includes those separators; the extraction's `characterCount` is the sum of page text lengths. Counts use JavaScript UTF-16 string length, not tokens. Exact source reconstruction removes each chunk's recorded overlap before concatenation. Very small diagnostic settings such as a size of 2 can yield a separator-only slice with no attributed page; the UI labels it honestly. These settings are test cases, not retrieval defaults.
+
+The inspector shows extracted character count, chunk count, maximum/overlap settings, and a selector for every chunk. Selecting a chunk shows source pages, characters, actual overlap, offsets, and its full plain text. Empty/image-only PDFs return zero chunks with a useful explanation. Close preview, navigation, page refresh, and deletion of the matching PDF clear both previews. The existing upload limit stays 4 MiB. Source PDFs remain private and persistent in Storage, but extracted text and chunks are not persisted.
+
+### Phase 6 file inventory
+
+Created:
+
+```text
+src/types/chunk.ts                         Chunk/options/result contracts
+src/lib/rag/chunk-document.ts               Manual server-only splitting
+src/components/documents/chunk-preview.tsx  Development chunk inspector
+scripts/check-chunking.mjs                  Chunking invariant/regression tests
+scripts/chunking-fixtures.mjs               Public synthetic multipage content
+scripts/create-chunking-test-files.mjs      Ignored disposable live PDFs
+supabase/storage/check-chunking-ownership.sql  READ ONLY deployed-policy check
+```
+
+Modified: `src/types/extraction.ts`, `src/lib/pdf/extraction-handler.ts`, `src/components/documents/documents-workspace.tsx`, `src/components/app-shell.tsx`, `src/app/(protected)/page.tsx`, `scripts/check-pdf.mjs`, `src/lib/rag/README.md`, `src/lib/pdf/README.md`, `package.json`, and `README.md`.
+
+No dependency, lockfile, environment, Storage policy, auth route, upload/delete handler, or chat provider change is required. The existing API performs chunking immediately after extraction; no additional endpoint or caller-supplied text is needed. No application table, schema migration, persistent chunk storage, OCR, embedding, vector, retrieval, RAG prompt, framework, paid API, or conversation persistence is introduced.
+
+### Verify Phase 6
+
+```powershell
+npm run typecheck
+npm run lint -- --max-warnings=0
+npm run test:chunking
+npm run test:pdf
+npm run test:storage
+npm run test:auth
+npm run test:chat
+npm run build
+npm run test:chunking:fixtures
+```
+
+The chunking tests cover exact coverage/reconstruction, natural boundaries, strict sizes, configurable overlap, true page spans, empty pages, deterministic results, invalid options, long tokens, fitting-token and Unicode regressions, and 160 varied boundary/configuration combinations. The real-parser tests also check owner PDFs through the authenticated extraction-to-chunking handler, multipage/blank-page metadata, image-only zero chunks, forged paths, another user's denial, and existing input limits/errors. Network guards assert zero outbound attempts. The offline SDK fixture tests API path scoping, not a claim that it implements deployed RLS.
+
+For a manual check, sign in directly in the app, generate the fixtures, and upload them from `.setup-cache/chunking-tests/`. `phase-6-small.pdf` should produce one readable chunk. `phase-6-multi-page.pdf` should produce several bounded chunks with overlap, and no chunk should credit blank page 2. Select every chunk to inspect its physical page list and text. `phase-6-image-only.pdf` should show the existing no-text message and zero chunks. Refresh preserves stored files while clearing previews. Test removal only on disposable fixtures using the app's confirmation control. Existing mock chat and authenticated navigation should still work.
+
+Keep `LLM_MODE=mock`; the chat badge and explicit local response confirm the running provider. No extraction/chunking code calls an LLM or embedding API. Phase 7 requires a separate instruction after Phase 6 review.
+
+### Phase 6 verification results
+
+TypeScript, lint with zero warnings, and the production build passed. All 83 automated checks passed: 20 chunking checks, 20 real-parser/pipeline checks, 18 Storage checks, 17 auth checks, and eight mock-chat checks. Chunking, PDF, and chat network guards recorded zero outbound attempts. No dependency or lockfile was added or changed.
+
+Live checks used the retained existing-account session and generated PDFs only. The small PDF yielded one readable 54-character chunk. The three-page PDF yielded four chunks of 1,190, 923, 1,164, and 1,162 characters, all below 1,200. Actual overlaps were 0, 200, 194, and 193 characters and matched the preceding chunk's suffix. Removing duplicate overlap reconstructed all 3,852 normalized characters from 3,850 extracted characters plus the two-newline page join. The cross-page chunk correctly listed pages `[1, 3]`, excluding blank physical page 2. The image-only PDF returned zero extracted characters and zero chunks with the existing no-text explanation.
+
+The source files remained listed after page refresh; text and chunk previews cleared. Authenticated navigation and the existing mock chat worked, returning the explicit local response. Cookie-free live requests redirected `/documents` to login and returned 401 for document listing, extraction/chunking, and chat APIs.
+
+The reviewed read-only `check-chunking-ownership.sql` passed against the deployed Storage policy. The owner could read the stored fixture, while a different user ID and the anonymous role could not. This uses temporary SQL role/identity claims, not a second real account, and changes no file, Storage row, account, bucket, or policy. The offline handler tests separately verify that forged owner/path fields and another user's context cannot obtain text or chunks.
+
+The user approved permanent deletion of the three named generated Phase 6 fixtures through the app. All three were deleted using the Documents confirmation control; no other file was deleted. Removing the PDF with the active preview cleared both the text and chunk inspectors. The library remained empty after refresh. The local ignored fixture generator remains available for future manual checks.
+
+`LLM_MODE=mock` remains active. The OpenAI provider remains a disabled stub with no SDK, key access, or HTTP request. No OpenAI usage, embedding call, or paid external API was generated by this implementation or validation. Only the existing Supabase Free-plan Auth/Storage and read-only policy checks were used; no plan upgrade or paid feature was enabled. Existing local environment values were neither changed nor printed. `.env.local` and generated PDF fixtures remain ignored by Git.
+
+Phase 6 is complete. Stop here for review; Phase 7 has not been implemented.

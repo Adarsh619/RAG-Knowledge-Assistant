@@ -6,9 +6,10 @@ import net from "node:net";
 import tls from "node:tls";
 import { createClient } from "@supabase/supabase-js";
 import { createTextPdf, corruptPdf } from "./pdf-fixtures.mjs";
+import { CHUNKING_TEST_PAGES } from "./chunking-fixtures.mjs";
 import { MAX_PDF_BYTES } from "../src/lib/storage/documents.ts";
 
-test("Phase 5 real PDF parser and authenticated download pipeline, with no outbound network", async (t) => {
+test("Real PDF parser and authenticated extraction-to-chunking pipeline, with no outbound network", async (t) => {
   const saved = [];
   let outboundAttempts = 0;
   function block(target, key) {
@@ -194,6 +195,14 @@ test("Phase 5 real PDF parser and authenticated download pipeline, with no outbo
         assert.equal(body.document.name, "phase-5-text-test.pdf");
         assert.equal(body.extraction.pages[1].pageNumber, 2);
         assert.match(body.extraction.pages[0].text, /Phase 5/);
+        assert.equal(body.chunking.chunks.length, 1);
+        assert.equal(body.chunking.sourceCharacterCount, 72);
+        assert.deepEqual(body.chunking.chunks[0].pageNumbers, [1, 2]);
+        assert.equal(body.chunking.chunks[0].documentId, id);
+        assert.equal(
+          body.chunking.chunks[0].text,
+          body.extraction.pages.map((page) => page.text).join("\n\n"),
+        );
         assert.ok(downloads.at(-1).includes(`/${userA}/${id}`));
       },
     );
@@ -303,7 +312,48 @@ test("Phase 5 real PDF parser and authenticated download pipeline, with no outbo
         downloadBytes = createTextPdf([null]);
         const response = await handleExtractDocument(request(), context());
         assert.equal(response.status, 200);
-        assert.equal((await response.json()).extraction.status, "no_text");
+        const body = await response.json();
+        assert.equal(body.extraction.status, "no_text");
+        assert.equal(body.chunking.chunks.length, 0);
+        assert.equal(body.chunking.sourceCharacterCount, 0);
+      },
+    );
+    await t.test(
+      "multi-page owner PDF yields bounded, overlapping, lossless chunks with physical pages",
+      async () => {
+        downloadBytes = createTextPdf(CHUNKING_TEST_PAGES);
+        const response = await handleExtractDocument(request(), context());
+        assert.equal(response.status, 200);
+        const body = await response.json();
+        assert.equal(body.extraction.pageCount, 3);
+        assert.equal(body.extraction.emptyPageCount, 1);
+        assert.equal(body.extraction.pages[1].text, "");
+        const source = body.extraction.pages
+          .filter((page) => page.text)
+          .map((page) => page.text)
+          .join("\n\n");
+        let reconstructed = "";
+        let previousEnd = 0;
+        const { chunks, options } = body.chunking;
+        assert.ok(chunks.length > 1);
+        assert.ok(
+          chunks.some((chunk) => chunk.pageNumbers.join(",") === "1,3"),
+        );
+        assert.ok(chunks.some((chunk) => chunk.overlapWithPrevious > 0));
+        for (const chunk of chunks) {
+          assert.equal(chunk.documentId, id);
+          assert.ok(chunk.characterCount <= options.maxCharacters);
+          assert.ok(chunk.overlapWithPrevious <= options.overlapCharacters);
+          assert.ok(!chunk.pageNumbers.includes(2));
+          assert.equal(
+            chunk.text,
+            source.slice(chunk.startOffset, chunk.endOffset),
+          );
+          reconstructed += chunk.text.slice(previousEnd - chunk.startOffset);
+          previousEnd = chunk.endOffset;
+        }
+        assert.equal(reconstructed, source);
+        assert.equal(body.chunking.sourceCharacterCount, source.length);
       },
     );
     await t.test(
