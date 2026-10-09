@@ -1,6 +1,6 @@
 # AI integration boundary
 
-The server-only provider interface selects by `LLM_MODE`. Phase 10 connects authenticated semantic retrieval to local document generation using the manually installed Ollama runtime.
+The server-only provider interface selects by `LLM_MODE`. Local document generation uses the manually installed Ollama runtime. Phase 11 attaches source metadata in `rag/answer.ts` from the selected context chunks after generation. The model provides answer text only; it does not supply citation identity.
 
 - Unset, blank, or `mock`: `providers/mock.ts` returns a local response. No network calls.
 - `local`: authenticated chat runs `rag/answer.ts`, reuses the existing query embedding and owner-only retrieval, assembles a bounded prompt, and calls `providers/local.ts`. Only `http://127.0.0.1:11434` is allowed; redirects and external fallbacks are blocked.

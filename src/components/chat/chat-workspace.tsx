@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Icon } from "@/components/ui/icon";
+import { ChatSources } from "./chat-sources";
 import { MAX_MESSAGE_LENGTH } from "@/types/chat";
 import { RAG_LIMITS } from "@/lib/rag/config";
 import type { StoredDocument, DocumentListResponse } from "@/types/document";
@@ -114,7 +115,7 @@ export function ChatWorkspace({
       }
       setMessages((current) => [
         ...current,
-        { id: crypto.randomUUID(), ...data.message, mode: data.mode, rag: data.rag },
+        { id: crypto.randomUUID(), ...data.message, mode: data.mode, rag: data.rag, sources: data.sources },
       ]);
     } catch (caught) {
       setDraft(message);
@@ -238,6 +239,9 @@ export function ChatWorkspace({
                     Local model: {message.rag.model} · {message.rag.contextChunkCount} passages used
                   </p>
                 )}
+                {message.role === "assistant" && message.rag?.status === "generated" && (
+                  <ChatSources sources={message.sources ?? []} />
+                )}
               </div>
             </div>
           ))}
@@ -312,7 +316,7 @@ export function ChatWorkspace({
           id="chat-status"
           className="mt-2 text-center text-xs leading-5 text-slate-500"
         >
-          {isLocal ? "Phase 10 · Local document RAG." : "Mock development only. No documents are retrieved."}
+          {isLocal ? "Phase 11 · Local document RAG with sources." : "Mock development only. No documents are retrieved."}
           {" "}Messages stay in this page’s memory and clear on refresh.
         </p>
       </form>

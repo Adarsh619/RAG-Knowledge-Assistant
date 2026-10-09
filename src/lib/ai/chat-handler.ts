@@ -57,7 +57,7 @@ export async function handleChatRequest(
       });
       const result = await runRag(search, context, { provider, signal: request.signal });
       return Response.json({
-        mode, message: { role: "assistant", content: result.content }, rag: result.rag,
+        mode, message: { role: "assistant", content: result.content }, rag: result.rag, sources: result.sources,
       } satisfies ChatResponse, { headers: { "Cache-Control": "private, no-store" } });
     }
     // Mock mode deliberately performs no retrieval, embedding or inference.
@@ -65,7 +65,7 @@ export async function handleChatRequest(
       throw new InputError("Document scope is available only in local RAG mode.", 400);
     const content = await provider.reply(message);
     return Response.json({
-      mode: provider.mode, message: { role: "assistant", content },
+      mode: provider.mode, message: { role: "assistant", content }, sources: [],
     } satisfies ChatResponse, { headers: { "Cache-Control": "private, no-store" } });
   } catch (cause) {
     if (cause instanceof InputError)

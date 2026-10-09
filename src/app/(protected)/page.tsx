@@ -127,7 +127,7 @@ export default function DashboardPage() {
         Manage stored PDFs and inspect their text, chunks and local embeddings
         on the Documents page. Ingest saves chunks and local vectors to
         PostgreSQL. Semantic retrieval is available there. Local document RAG is
-        available in Chat; conversation history arrives later. Chat defaults
+        available in Chat with expandable source evidence; conversation history arrives later. Chat defaults
         to mock mode until local generation is explicitly enabled.
       </p>
     </>
