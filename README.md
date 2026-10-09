@@ -1,6 +1,6 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 9 — authenticated semantic retrieval from persisted document chunks, using local query embeddings and exact pgvector cosine search.**
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 10 — full local document RAG with the manually installed Ollama qwen3:4b-instruct model.** Earlier phase sections are historical; the Phase 10 section below describes current behavior and real-model validation.
 
 ## Run locally
 
@@ -14,7 +14,7 @@ npm run dev
 
 Open http://localhost:3000/login, or the URL printed by Next.js if that port is occupied. Stop a production preview on the same port before starting development.
 
-No LLM API key, credits, or payment method is needed. Supabase authentication and Storage use the existing Free-plan project URL and public publishable key in `.env.local`. The exact names are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; do not use a private secret/service-role key. If `LLM_MODE` is unset or blank, chat defaults to `mock`. Preserve existing local values and keep:
+No LLM API key, credits, or payment method is needed. Supabase authentication and Storage use the existing Free-plan project URL and public publishable key in `.env.local`. The exact names are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; do not use a private secret/service-role key. If `LLM_MODE` is unset or blank, chat defaults to `mock`. The safe default below can be explicitly changed to local using the Phase 10 configuration; preserve existing local Supabase values:
 
 ```dotenv
 LLM_MODE=mock
@@ -25,14 +25,14 @@ LLM_MODE=mock
 ## What works now
 
 - `/`: dashboard with links to the private library and knowledge-base capabilities; conversation count remains a placeholder.
-- `/chat`: working local message submission, user and assistant bubbles, a loading state, error messages, and a clearly labeled mock response.
+- `/chat`: working mock chat by default; explicitly configured local mode connects authenticated retrieval, grounded context and a loopback-only Ollama provider, with all-document/single-document scope.
 - `/documents`: private PDF upload/listing, local extraction, chunk and embedding inspection, persistent ingestion/re-ingestion, coordinated owner deletion and a semantic retrieval inspector.
 - Shared responsive navigation, active-page indication, and skip-to-content link.
 - `/login` and `/signup`: email/password authentication; application pages, chat API, and document API require a verified session.
 
-Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current message; mock responses do not reason over previous messages.
+Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters in mock mode or 1,000 in local RAG mode. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current question; earlier conversation messages are not model context.
 
-Chat messages live in React state only. Refreshing or leaving chat clears them. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. **Ingest** persists document metadata, chunk text/pages/offsets and local 384-dimensional embeddings in PostgreSQL. Extraction/embedding previews and retrieval questions/results exist only in request/React memory. Public model files are cached in ignored `.setup-cache`. OCR, final RAG answers, chat-document integration and conversation persistence remain outside this phase. Earlier phase sections below are historical records.
+Chat messages live in React state only. Refreshing or leaving chat clears them. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. **Ingest** persists document metadata, chunk text/pages/offsets and local 384-dimensional embeddings in PostgreSQL. Extraction/embedding previews, retrieval questions/results and generated answers exist only in request/React memory. Public embedding model files are cached in ignored `.setup-cache`. OCR, polished citations and conversation persistence remain outside this phase.
 
 ## Files created or modified in Phase 2 (historical locations)
 
@@ -885,3 +885,121 @@ Cookie-free requests returned 401 for retrieval/documents/extraction/embedding/i
 The advisor reports no performance findings. Existing `public.rls_auto_enable()` SECURITY DEFINER execution privileges and disabled leaked-password protection remain as documented in Phase 8; the new invoker RPC adds no such finding. No unrelated project setting was changed.
 
 Phase 9 is complete. Stop for review and testing; Phase 10 has not been started.
+
+## Phase 10 — Full local RAG
+
+Phase 10 connects authenticated document retrieval to a real local generative model. Ollama was installed manually by the user. The assistant installed no runtime/package and downloaded no model weights. The earlier preparation notes are retained locally in ignored `.setup-cache/phase-10/previous-phase-10-notes.md`. Stop at Phase 10; polished citations and conversation persistence remain future phases.
+
+### Exact current configuration
+
+The server reads these settings:
+
+```dotenv
+LLM_MODE=local
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:4b-instruct
+```
+
+`.env.example` defaults to safe `LLM_MODE=mock` and contains no real credentials. The existing local-only `.env.local` was preserved: the user had already configured local mode, the installed model and a localhost URL. It remains ignored and untracked. Preserve the existing Supabase public URL/publishable-key names and empty OpenAI placeholder.
+
+Before this continuation, the provider read `LLM_MODE` and `OLLAMA_MODEL` but used a hard-coded endpoint and pinned `qwen3:1.7b`. It now validates `OLLAMA_BASE_URL` and pins the user's installed [qwen3:4b-instruct](https://ollama.com/library/qwen3:4b-instruct), GGUF/Q4_K_M. The full reviewed manifest digest is `0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0`. The installed digest matched the official registry manifest text; no model weights were downloaded to verify it.
+
+Only `http://localhost:11434` or `http://127.0.0.1:11434` is accepted, optionally with a trailing slash. Credentials, other hosts/ports, HTTPS, paths, queries and fragments are rejected before model I/O. Requests use the canonical IP `http://127.0.0.1:11434`, avoiding DNS lookup. Redirects are rejected. No browser-supplied endpoint/model is accepted. Inventory must match the exact model digest, GGUF format, qwen3 family and Q4_K_M quantization, with no remote model/host fields. Changed aliases or cloud models fail closed.
+
+Unset/blank mode still defaults to mock. OpenAI is disabled even if explicitly selected or a key exists; no API-key-based provider switching exists. No OpenAI SDK, hosted inference, paid API or paid Supabase feature is used. Keep Ollama cloud features disabled in the Ollama process's own environment; Next.js environment variables do not configure that separate process. The application never calls a pull/install endpoint.
+
+### Complete request flow
+
+```text
+Chat question + optional persisted document UUID
+  → POST /api/chat
+  → verified authenticated SSR client + bounded input validation
+  → explicit LLM_MODE=local
+  → existing cached MiniLM query embedding: normalized vector(384)
+  → existing search_document_chunks RPC, SECURITY INVOKER + owner-only RLS
+  → select relevant owned passages and construct bounded grounded context
+  → no usable context: return abstention and skip Ollama entirely
+  → system prompt + JSON question/reference passages
+  → loopback-only Ollama model identity preflight
+  → local qwen3:4b-instruct generation
+  → validated answer + small generation summary
+  → chat bubble; request/page memory only
+```
+
+Next.js handles authentication, local query embeddings, Supabase retrieval and prompt assembly. Ollama separately runs the generative model on the same computer. MiniLM remains `Xenova/all-MiniLM-L6-v2`, pinned revision `751bff37182d3f1213fa05d7196b954e230abad9`, mean pooling, normalization, CPU/q8 and 384 dimensions. Changing the generative model does not change the embedding space or database dimension.
+
+Retrieval selects text; generation writes an answer from it. The augmented context is the retrieved reference text supplied with the question. Embeddings are numerical meaning representations, not generated answers. Query and stored chunk embeddings must share the same model/revision and normalization to make vector comparison meaningful.
+
+The browser sends only `{ message, documentId? }`; it cannot choose an owner, vector, provider, system prompt, history, top-k or threshold. The route builds its repository from the same server-verified user's normal SSR session. Existing invoker RPC/RLS protects both all-document and single-document retrieval; foreign IDs yield no matches. No service-role key, schema migration, index, grant, policy or Auth setting change was introduced.
+
+### Grounding and bounded context
+
+`src/lib/rag/config.ts` centralizes defaults: up to **5** chunks, minimum cosine similarity **0.30**, **6,000 UTF-8 bytes** of serialized reference passages, **7,000 bytes** of system/user prompt, **8,192 context tokens**, **384 output tokens** and a **120-second** generation timeout. Questions are capped at 1,000 characters and the existing MiniLM tokenizer limit. The byte budget is conservative for this model's byte-level tokenizer/template; it is not an exact token count.
+
+Passages are ordered by descending similarity, deduplicated by chunk UUID, filtered for nonempty text/relevance and included whole within the budget. Oversized passages are skipped, not cut mid-word. Document UUID, filename, chunk index, physical pages and similarity remain alongside each passage. No vector coordinates are sent to the generator. The threshold is adjustable in server configuration and is not a confidence probability or universal relevance boundary.
+
+`prompt.ts` separately defines the system grounding instructions. The question and PDF text are JSON data: the model is told to ignore embedded instructions, avoid unsupported/outside facts and acknowledge missing context. No usable passages means no generation call. Related passages can still omit an answer; the model must abstain rather than invent it. These instructions reduce risk but cannot guarantee that every future answer is accurate or immune to prompt injection.
+
+The provider uses two messages, non-streaming output, `think: false`, temperature 0 and one active generation per server process. Missing runtime/model, changed model identity, malformed/incomplete/truncated answers and timeouts produce visible errors with no fallback. The UI uses a 150-second request timeout, restores failed drafts and aborts when leaving the page. Chat messages are temporary and each question is independent; earlier messages are not sent as context.
+
+### Files created or modified
+
+Created in Phase 10:
+
+- `src/types/rag.ts` — generated/insufficient-context summary.
+- `src/lib/rag/config.ts` — context, retrieval and generation limits.
+- `src/lib/rag/prompt.ts` — grounding prompt and whole-passage context assembly.
+- `src/lib/rag/answer.ts` — embedding → owned retrieval → local generation orchestration.
+- `src/lib/ai/local-config.ts` — reviewed model pin, validated localhost endpoint and safe errors.
+- `src/lib/ai/providers/local.ts` — bounded Ollama generation and inventory diagnostic.
+- `scripts/check-local-runtime.mjs` — read-only runtime/model check.
+- `scripts/check-rag.mjs` — RAG, provider, API and localhost safety tests.
+- `scripts/create-rag-test-files.mjs` — generated React/ocean PDFs with known test facts.
+- `supabase/checks/check-phase-10-ownership.sql` — read-only deployed-RLS/argument checks; no migration.
+
+Modified:
+
+- `src/types/chat.ts` — local mode, optional scope, grounding/cancellation and summary contracts.
+- `src/lib/ai/provider.ts`, `providers/mock.ts`, `chat-handler.ts` — explicit mode dispatch and authenticated bounded chat.
+- `src/app/api/chat/route.ts` — verified session reused for the retrieval repository.
+- `src/components/chat/chat-workspace.tsx` — document scope, local indicators, answers and errors/loading.
+- `src/app/(protected)/chat/page.tsx`, `page.tsx`, `src/components/app-shell.tsx` — current capabilities/status.
+- `scripts/check-chat.mjs` — preserve safe mock/disabled OpenAI tests under the authenticated handler contract.
+- `package.json` — local diagnostic, RAG tests and fixture command; no dependency changes.
+- `.env.example` — safe mock default, localhost/model settings and empty credential placeholders.
+- `src/lib/ai/README.md`, `src/types/README.md`, `README.md` — learning, configuration and validation notes.
+
+The lockfile, installed dependencies, local environment values, Supabase schema/policies and MiniLM revision are unchanged. Ignored local proof artifacts include generated PDFs, screenshots, an owner-RLS retrieval snapshot, a supplemental local prompt check and its JSON report. These contain synthetic fixture text only and are not application persistence.
+
+### Checks and real-model results
+
+```powershell
+npm run local:check
+npm run test:rag:fixtures
+npm run typecheck
+npm run lint -- --max-warnings=0
+npm run build
+npm test
+```
+
+The runtime diagnostic reports all three flags true: available, installed, model matches. It reads inventory only. All **161 automated tests** passed, including 18 RAG tests (parent included). Tests exercise real cached MiniLM inference, PDF extraction/chunking, normalization/dimensions, auth/Storage/persistence/retrieval contracts, prompt bounds/metadata, owner/scope denial, insufficient-context skipping, cloud/changed-model rejection, localhost-only configuration, concurrency/cancellation and response validation. Simulated transports are used for automated database/generation contracts; network guards record zero real outbound attempts. Real local generation is tested separately below.
+
+Two generated PDFs were uploaded through the existing authenticated Documents app: `phase-10-react.pdf` (3,828 bytes) and `phase-10-ocean.pdf` (3,638 bytes). Each ingested to one ready document with three chunks. Read-only database checks verified all six vectors are normalized and 384-dimensional. React chunks have 1,126/1,199/548 characters and physical pages [1]/[1,3]/[3]; ocean chunks have 1,176/1,184/324 characters and the same page sets. Blank physical page 2 is preserved correctly as blank.
+
+The question **“What is the React training project named, and what does useState do?”** retrieved three React chunks with similarities **0.6645, 0.5743 and 0.5113**. The real authenticated chat returned: **“The React training project named in the document is Cedar. The useState hook stores component state, such as a counter or form input, and calling the state setter schedules a render with the updated state value.”** All facts appear in the retrieved PDF text. The same question in React-only scope returned the same supported answer using three passages.
+
+A supplemental local check used the real owner-RLS RPC snapshot and real MiniLM query adapter, asserting that the exact persisted passage text, question and page metadata were transmitted to the actual loopback Ollama API. It generated a real answer, not a fixture response: **942 prompt tokens, 42 output tokens, done_reason=stop, approximately 4.81 seconds**, with three passages and 3,381 context bytes. Its recorded prompt hash was `3a4641ac1b32fb04376f2c8d23fab7134ee48646d3131c0c4ce81e8004f29e05`. This supplements, rather than substitutes for, the normal authenticated browser API test. Ollama reported 2,289,618,124 VRAM bytes and the explicit 8,192-token context window.
+
+An unrelated medieval-cathedral question returned the clear insufficient-context response without generation. The Ollama model keep-alive expiry remained unchanged across that request. Ocean-only scope likewise refused the React question rather than using out-of-scope passages. An ocean-only question correctly returned **Blue Lantern** and **krill**, both present in that PDF. A related but unsupported question about Cedar's annual budget retrieved one passage and the real model answered that the supplied context was insufficient to determine the budget; no amount was invented.
+
+The deployed read-only ownership transaction returned six all-document and three scoped results for the owner, and zero of the owner's results for a different authenticated JWT identity. That identity could not see the owner's document/chunks/private Storage object. Anonymous RPC execution and invalid vector/control arguments remained rejected. There is only one real account, so the second identity is synthetic; a second real browser account was not created or tested. The transaction changes only session-local role/claims and rolls back, modifying no data.
+
+Cookie-free requests returned 307 to login for protected Chat/Documents and 401 for chat/document/retrieval/extraction/embedding/ingestion APIs. The existing authenticated session remained usable across navigation. No OpenAI, hosted inference, paid API or Supabase upgrade was used; the organization still reports Free. No installation or model download occurred during this continuation.
+
+TypeScript, lint with zero warnings and production build passed. After the build, the production server again generated the supported Cedar/useState answer from the re-ingested React PDF using three passages. The proof screenshot is `.setup-cache/phase-10/production-rag-answer.jpg`; earlier all-document proof is `real-rag-answer.jpg`.
+
+Full Documents refresh retained both ready metadata records and authentication while clearing temporary previews. Existing extraction returned three physical pages, 2,475 extracted characters and one blank page. The chunk inspector showed three chunks with the existing 1,200-character maximum/200-character overlap. Its embedding inspector embedded all three chunks in one batch and reported normalized 384-coordinate vectors, q8/CPU execution and model-instance reuse. Explicit React re-ingestion retained its document UUID, replaced all three chunk UUIDs, advanced its processed date and kept three rows without duplication; production RAG remained functional afterward.
+
+The user approved permanent deletion of exactly the two generated Phase 10 PDFs. The production Documents app removed both private Storage objects and both metadata rows, cascading all six chunks/embeddings. Read-only checks confirmed zero remaining fixture objects/documents/chunks, zero orphan chunks, the still-private bucket and the unchanged single Auth account. A fresh production chat question afterward returned insufficient context without generation, confirming deleted sources were no longer available; proof is `deleted-sources-proof.jpg`. No other PDF, record or account was deleted. Local ignored generated fixtures/proof artifacts remain available for review.
+
+Phase 10 is complete within the requested local RAG scope. Ownership was validated through deployed read-only authenticated identity emulation and automated contracts; there was no second real browser-account test. Phase 11 has not been started. No new database objects or policies, retrieval optimizations, persistent conversations, polished citations or installation/download operations were added.

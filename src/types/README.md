@@ -1,5 +1,5 @@
 # Shared application types
 
-`chat.ts` contains the Phase 2 message, request, response, and provider contracts, plus the shared message length limit. It is safe to import from either the browser or server: it contains no environment reads or secrets.
+`chat.ts` contains message, request, response and provider contracts. It supports mock, local and disabled OpenAI modes, optional document scope and grounding/cancellation options. `rag.ts` contains a small generation summary (status, model, retrieved/used counts and context bytes); it does not expose chunk contents or embedding vectors.
 
-Document, chunk, citation, and persisted conversation types remain reserved for later phases. Component-only prop types live beside their components.
+`document.ts`, `extraction.ts`, `chunk.ts`, `embedding.ts`, `ingestion.ts` and `retrieval.ts` describe the earlier document pipeline. These shared files contain no environment reads or secrets and can be imported in browser or server code. Component-only prop types live beside their components. Polished citations and persisted conversations remain future phases.
