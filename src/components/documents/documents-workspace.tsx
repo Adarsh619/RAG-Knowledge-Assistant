@@ -39,6 +39,11 @@ export function DocumentsWorkspace() {
   const extractionRequest = useRef<AbortController | null>(null);
   const [embedding, setEmbedding] = useState<EmbeddingResponse | null>(null);
   const [embeddingId, setEmbeddingId] = useState<string | null>(null);
+  const [ingestingId, setIngestingId] = useState<string | null>(null);
+  const [failedIngestionId, setFailedIngestionId] = useState<string | null>(
+    null,
+  );
+  const ingestionRequest = useRef<AbortController | null>(null);
   const embeddingRequest = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -49,7 +54,8 @@ export function DocumentsWorkspace() {
     uploading ||
     deletingId !== null ||
     extractingId !== null ||
-    embeddingId !== null;
+    embeddingId !== null ||
+    ingestingId !== null;
 
   const loadDocuments = useCallback(async (offset = 0) => {
     listRequest.current?.abort();
@@ -96,6 +102,7 @@ export function DocumentsWorkspace() {
       listRequest.current?.abort();
       extractionRequest.current?.abort();
       embeddingRequest.current?.abort();
+      ingestionRequest.current?.abort();
     };
   }, [loadDocuments]);
 
@@ -165,6 +172,7 @@ export function DocumentsWorkspace() {
           ? cause.message
           : "The document could not be deleted. Try again.",
       );
+      await loadDocuments();
     } finally {
       setDeletingId(null);
       mutating.current = false;
@@ -238,6 +246,47 @@ export function DocumentsWorkspace() {
     }
   }
 
+  async function ingestDocument(document: StoredDocument) {
+    if (mutating.current) return;
+    mutating.current = true;
+    const controller = new AbortController();
+    ingestionRequest.current = controller;
+    setIngestingId(document.id);
+    setFailedIngestionId(null);
+    setError(null);
+    setSuccess(null);
+    setConfirmDeleteId(null);
+    try {
+      const response = await fetch("/api/documents/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: document.id,
+          reingest: document.ingestion?.status === "ready",
+        }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const body = await readResponse<DocumentMutationResponse>(response);
+      if (!controller.signal.aborted) setSuccess(body.message);
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setFailedIngestionId(document.id);
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Ingestion failed. Try again.",
+        );
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        await loadDocuments();
+        setIngestingId(null);
+      }
+      mutating.current = false;
+    }
+  }
+
   return (
     <>
       <section
@@ -305,6 +354,12 @@ export function DocumentsWorkspace() {
         <p role="status" className="mt-4 text-sm text-emerald-800">
           Reading your private PDF, extracting text, and creating chunks
           locally…
+        </p>
+      )}
+      {ingestingId && (
+        <p role="status" className="mt-4 text-sm text-emerald-800">
+          Processing your private PDF: extraction → chunking → local embeddings
+          → PostgreSQL. The first model load may take a moment.
         </p>
       )}
       {error && (
@@ -387,6 +442,7 @@ export function DocumentsWorkspace() {
                   <th className="px-6 py-3 font-medium">File name</th>
                   <th className="px-4 py-3 font-medium">Size</th>
                   <th className="px-4 py-3 font-medium">Uploaded</th>
+                  <th className="px-4 py-3 font-medium">Ingestion</th>
                   <th className="px-6 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -412,11 +468,52 @@ export function DocumentsWorkspace() {
                         ? new Date(document.uploadedAt).toLocaleString()
                         : "Date unavailable"}
                     </td>
+                    <td className="min-w-56 px-4 py-5 text-xs leading-5 text-slate-500">
+                      <p className="font-semibold text-slate-700">
+                        {ingestingId === document.id
+                          ? "Processing…"
+                          : document.ingestion?.status === "ready"
+                            ? "Ready"
+                            : document.ingestion?.status === "deleting"
+                              ? "Deletion pending"
+                              : failedIngestionId === document.id
+                                ? "Failed — retry ingestion"
+                                : "Not processed"}
+                      </p>
+                      {document.ingestion?.status === "ready" && (
+                        <>
+                          <p>
+                            {document.ingestion.chunkCount} chunks ·{" "}
+                            {document.ingestion.embeddingDimension} dimensions
+                          </p>
+                          <p>{document.ingestion.embeddingModel}</p>
+                          <p>
+                            Processed:{" "}
+                            {document.ingestion.processedAt
+                              ? new Date(
+                                  document.ingestion.processedAt,
+                                ).toLocaleString()
+                              : "Unavailable"}
+                          </p>
+                          {failedIngestionId === document.id && (
+                            <p className="text-red-700">
+                              Last attempt failed; previous result retained.
+                            </p>
+                          )}
+                        </>
+                      )}
+                      {document.storageMissing && (
+                        <p>
+                          PDF removed; retry deletion to finish database
+                          cleanup.
+                        </p>
+                      )}
+                    </td>
                     <td className="px-6 py-5">
                       {confirmDeleteId === document.id ? (
                         <div className="flex min-w-36 flex-wrap gap-3">
                           <p className="w-full text-xs text-slate-500">
-                            Delete this file permanently?
+                            Permanently delete this PDF and its stored chunks?
                           </p>
                           <button
                             type="button"
@@ -441,7 +538,28 @@ export function DocumentsWorkspace() {
                         <div className="flex min-w-40 flex-wrap gap-4">
                           <button
                             type="button"
-                            disabled={busy || loadingList}
+                            disabled={
+                              busy ||
+                              loadingList ||
+                              document.ingestion?.status === "deleting"
+                            }
+                            onClick={() => void ingestDocument(document)}
+                            aria-label={`${document.ingestion?.status === "ready" ? "Re-ingest" : "Ingest"} ${document.name}`}
+                            className="text-xs font-semibold text-emerald-800 disabled:opacity-50"
+                          >
+                            {ingestingId === document.id
+                              ? "Processing…"
+                              : document.ingestion?.status === "ready"
+                                ? "Re-ingest"
+                                : "Ingest"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              loadingList ||
+                              document.ingestion?.status === "deleting"
+                            }
                             onClick={() => void extractDocument(document.id)}
                             aria-label={`Extract text from ${document.name}`}
                             className="text-xs font-semibold text-emerald-800 disabled:opacity-50"
@@ -457,7 +575,9 @@ export function DocumentsWorkspace() {
                             aria-label={`Delete ${document.name}`}
                             className="text-xs font-semibold text-red-700 disabled:opacity-50"
                           >
-                            Delete
+                            {document.ingestion?.status === "deleting"
+                              ? "Retry deletion"
+                              : "Delete"}
                           </button>
                         </div>
                       )}
@@ -502,9 +622,10 @@ export function DocumentsWorkspace() {
         </>
       )}
       <p className="mt-6 text-xs leading-5 text-slate-400">
-        PDFs are stored privately. Extract text to inspect local parsing and
-        chunks. Document search and answers with sources will arrive in later
-        phases.
+        PDFs are stored privately. Ingest saves document metadata, chunks and
+        local embeddings in PostgreSQL. Extract text opens a temporary preview.
+        Re-ingest replaces stored chunks atomically. Document search and answers
+        with sources will arrive in later phases.
       </p>
     </>
   );

@@ -14,7 +14,7 @@ export interface PdfExtraction {
 }
 
 export interface ExtractionResponse {
-  document: { id: string; name: string };
+  document: { id: string; name: string; size: number };
   extraction: PdfExtraction;
   chunking: ChunkingResult;
 }

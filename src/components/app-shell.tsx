@@ -65,7 +65,7 @@ export function AppShell({
               Built to learn, step by step.
             </span>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Phase 07 · Local embeddings
+              Phase 08 · Persistent knowledge base
               <br />
               Store your PDFs privately. Chat stays in mock mode.
             </p>
@@ -96,7 +96,7 @@ export function AppShell({
           </span>
           <div className="flex items-center gap-4">
             <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 sm:block">
-              Phase 7 · Local embeddings
+              Phase 8 · PostgreSQL persistence
             </span>
             <SignOutButton />
           </div>
