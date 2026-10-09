@@ -169,6 +169,7 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
           ["/api/chat", "Sign in to use chat."],
           ["/api/documents", "Sign in to manage documents."],
           ["/api/documents/extract", "Sign in to manage documents."],
+          ["/api/documents/embed", "Sign in to manage documents."],
         ]) {
           const response = await updateSession(pageRequest(path));
           assert.equal(response.status, 401);
@@ -269,6 +270,7 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
           "/api/chat",
           "/api/documents",
           "/api/documents/extract",
+          "/api/documents/embed",
         ]) {
           const response = await updateSession(pageRequest(path, true));
           assert.equal(response.status, 200);

@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { ExtractionPreview } from "./extraction-preview";
 import { ChunkPreview } from "./chunk-preview";
 import type { ExtractionResponse } from "@/types/extraction";
+import type { EmbeddingResponse } from "@/types/embedding";
 import {
   formatFileSize,
   MAX_PDF_SIZE_LABEL,
@@ -36,12 +37,19 @@ export function DocumentsWorkspace() {
   const [extractingId, setExtractingId] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<ExtractionResponse | null>(null);
   const extractionRequest = useRef<AbortController | null>(null);
+  const [embedding, setEmbedding] = useState<EmbeddingResponse | null>(null);
+  const [embeddingId, setEmbeddingId] = useState<string | null>(null);
+  const embeddingRequest = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const listRequest = useRef<AbortController | null>(null);
   const mutating = useRef(false);
-  const busy = uploading || deletingId !== null || extractingId !== null;
+  const busy =
+    uploading ||
+    deletingId !== null ||
+    extractingId !== null ||
+    embeddingId !== null;
 
   const loadDocuments = useCallback(async (offset = 0) => {
     listRequest.current?.abort();
@@ -87,6 +95,7 @@ export function DocumentsWorkspace() {
     return () => {
       listRequest.current?.abort();
       extractionRequest.current?.abort();
+      embeddingRequest.current?.abort();
     };
   }, [loadDocuments]);
 
@@ -148,6 +157,7 @@ export function DocumentsWorkspace() {
       setExtraction((current) =>
         current?.document.id === id ? null : current,
       );
+      setEmbedding((current) => (current?.document.id === id ? null : current));
       await loadDocuments();
     } catch (cause) {
       setError(
@@ -168,6 +178,7 @@ export function DocumentsWorkspace() {
     extractionRequest.current = controller;
     setExtractingId(id);
     setExtraction(null);
+    setEmbedding(null);
     setError(null);
     setSuccess(null);
     setConfirmDeleteId(null);
@@ -191,6 +202,38 @@ export function DocumentsWorkspace() {
       }
     } finally {
       if (!controller.signal.aborted) setExtractingId(null);
+      mutating.current = false;
+    }
+  }
+
+  async function generateEmbeddings() {
+    if (!extraction || mutating.current) return;
+    mutating.current = true;
+    const controller = new AbortController();
+    embeddingRequest.current = controller;
+    setEmbeddingId(extraction.document.id);
+    setEmbedding(null);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await fetch("/api/documents/embed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: extraction.document.id }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const body = await readResponse<EmbeddingResponse>(response);
+      if (!controller.signal.aborted) setEmbedding(body);
+    } catch (cause) {
+      if (!controller.signal.aborted)
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Local embedding generation failed. Try again.",
+        );
+    } finally {
+      if (!controller.signal.aborted) setEmbeddingId(null);
       mutating.current = false;
     }
   }
@@ -442,9 +485,20 @@ export function DocumentsWorkspace() {
         <>
           <ExtractionPreview
             result={extraction}
-            onClose={() => setExtraction(null)}
+            onClose={() => {
+              embeddingRequest.current?.abort();
+              setExtraction(null);
+              setEmbedding(null);
+              setEmbeddingId(null);
+            }}
           />
-          <ChunkPreview result={extraction} />
+          <ChunkPreview
+            result={extraction}
+            embedding={embedding}
+            onEmbed={() => void generateEmbeddings()}
+            embeddingBusy={embeddingId !== null}
+            disabled={busy || loadingList}
+          />
         </>
       )}
       <p className="mt-6 text-xs leading-5 text-slate-400">

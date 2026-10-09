@@ -16,9 +16,14 @@
     "test:pdf": "node --conditions=react-server --test scripts/check-pdf.mjs",
     "test:pdf:fixtures": "node scripts/create-extraction-test-files.mjs",
     "test:chunking": "node --conditions=react-server --test scripts/check-chunking.mjs",
-    "test:chunking:fixtures": "node scripts/create-chunking-test-files.mjs"
+    "test:chunking:fixtures": "node scripts/create-chunking-test-files.mjs",
+    "embeddings:prepare": "node --conditions=react-server scripts/prepare-embedding-model.mjs",
+    "test:embeddings": "node --conditions=react-server --test scripts/check-embeddings.mjs",
+    "test:embeddings:model": "node --conditions=react-server --test scripts/check-embedding-model.mjs",
+    "test:embeddings:fixtures": "node scripts/create-embedding-test-files.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.1",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
     "next": "15.5.26",
