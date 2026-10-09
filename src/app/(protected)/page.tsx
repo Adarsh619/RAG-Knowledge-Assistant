@@ -56,7 +56,7 @@ export default function DashboardPage() {
             {
               label: "Knowledge base",
               icon: "grid",
-              note: "Persist chunks and local embeddings from Documents",
+              note: "Search your persisted chunks by meaning from Documents",
             },
           ] as const
         ).map((item) => (
@@ -126,7 +126,8 @@ export default function DashboardPage() {
       <p className="mt-6 text-xs leading-5 text-slate-400">
         Manage stored PDFs and inspect their text, chunks and local embeddings
         on the Documents page. Ingest saves chunks and local vectors to
-        PostgreSQL. Search and conversation history arrive later. Chat runs
+        PostgreSQL. Semantic retrieval is available there; grounded answers and
+        conversation history arrive later. Chat runs
         locally in mock mode.
       </p>
     </>

@@ -69,7 +69,7 @@ test("Real cached MiniLM CPU embeddings, semantic similarity and zero network", 
     await t.test(
       "cosine similarity ranks the related React sentence above the unrelated sentence",
       () => {
-        // Learning comparison only. No document lookup or retrieval API is built.
+        // Learning comparison only: this test never contacts the database.
         const cosine = (a, b) =>
           a.reduce((sum, value, index) => sum + value * b[index], 0) /
           (Math.hypot(...a) * Math.hypot(...b));
@@ -156,6 +156,20 @@ test("Real cached MiniLM CPU embeddings, semantic similarity and zero network", 
         assert.equal(service.getStatistics().initializationCount, 0);
       },
     );
+    await t.test("query vectors share the ingestion model, revision and singleton", async () => {
+      const { embedQuery } = await import("../src/lib/embeddings/embed-query.ts");
+      const query = await embedQuery("How does React help build user interfaces?");
+      assert.equal(query.vector.length, 384);
+      assert.ok(query.vector.every(Number.isFinite));
+      assert.ok(Math.abs(Math.hypot(...query.vector) - 1) < 0.0001);
+      assert.equal(query.metadata.model, learningResult.model);
+      assert.equal(query.metadata.revision, learningResult.revision);
+      assert.equal(query.metadata.modelReused, true);
+      assert.equal(localChunkEmbedder.getStatistics().initializationCount, 1);
+      const score = (vector) => query.vector.reduce((sum, value, i) => sum + value * vector[i], 0);
+      assert.ok(score(learningResult.chunks[1].embedding) > score(learningResult.chunks[2].embedding) + 0.1);
+      await assert.rejects(embedQuery("你".repeat(600)), (error) => error.status === 422 && /question exceeds/.test(error.message));
+    });
     await t.test(
       "real model loading and inference attempted zero outbound requests",
       () => {

@@ -5,6 +5,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { Icon } from "@/components/ui/icon";
 import { ExtractionPreview } from "./extraction-preview";
 import { ChunkPreview } from "./chunk-preview";
+import { RetrievalInspector } from "./retrieval-inspector";
 import type { ExtractionResponse } from "@/types/extraction";
 import type { EmbeddingResponse } from "@/types/embedding";
 import {
@@ -601,6 +602,12 @@ export function DocumentsWorkspace() {
           </div>
         )}
       </section>
+      <RetrievalInspector
+        key={documents.map((document) => `${document.id}:${document.ingestion?.status}:${document.ingestion?.processedAt}`).join("|")}
+        documents={documents}
+        disabled={busy || loadingList}
+      />
+
       {extraction && (
         <>
           <ExtractionPreview
@@ -624,8 +631,8 @@ export function DocumentsWorkspace() {
       <p className="mt-6 text-xs leading-5 text-slate-400">
         PDFs are stored privately. Ingest saves document metadata, chunks and
         local embeddings in PostgreSQL. Extract text opens a temporary preview.
-        Re-ingest replaces stored chunks atomically. Document search and answers
-        with sources will arrive in later phases.
+        Re-ingest replaces stored chunks atomically. Use the retrieval inspector
+        to examine matching passages. AI answers with sources arrive in later phases.
       </p>
     </>
   );
