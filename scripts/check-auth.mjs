@@ -170,6 +170,7 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
           ["/api/documents", "Sign in to manage documents."],
           ["/api/documents/extract", "Sign in to manage documents."],
           ["/api/documents/embed", "Sign in to manage documents."],
+          ["/api/documents/ingest", "Sign in to manage documents."],
         ]) {
           const response = await updateSession(pageRequest(path));
           assert.equal(response.status, 401);
@@ -271,6 +272,7 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
           "/api/documents",
           "/api/documents/extract",
           "/api/documents/embed",
+          "/api/documents/ingest",
         ]) {
           const response = await updateSession(pageRequest(path, true));
           assert.equal(response.status, 200);

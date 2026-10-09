@@ -180,8 +180,8 @@ export function ChunkPreview({
         </div>
       )}
       <p className="mt-4 text-xs leading-5 text-slate-400">
-        Split locally on the server. Chunks exist only for this preview and
-        clear with the text preview. Nothing is saved to a database.
+        Split locally on the server. These preview results clear with the text
+        preview. Use Ingest to persist document chunks and local embeddings.
       </p>
     </section>
   );

@@ -20,7 +20,10 @@
     "embeddings:prepare": "node --conditions=react-server scripts/prepare-embedding-model.mjs",
     "test:embeddings": "node --conditions=react-server --test scripts/check-embeddings.mjs",
     "test:embeddings:model": "node --conditions=react-server --test scripts/check-embedding-model.mjs",
-    "test:embeddings:fixtures": "node scripts/create-embedding-test-files.mjs"
+    "test:embeddings:fixtures": "node scripts/create-embedding-test-files.mjs",
+    "test:ingestion": "node --conditions=react-server --test scripts/check-ingestion.mjs",
+    "test:ingestion:fixtures": "node scripts/create-ingestion-test-files.mjs",
+    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",

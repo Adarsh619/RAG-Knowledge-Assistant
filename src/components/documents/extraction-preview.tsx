@@ -61,8 +61,9 @@ export function ExtractionPreview({
         </>
       )}
       <p className="mt-4 text-xs leading-5 text-slate-400">
-        Extracted locally on the server. Nothing is saved to a database; this
-        preview clears on refresh.
+        Extracted locally on the server. This preview action does not save text;
+        use Ingest to persist chunks and embeddings. The preview clears on
+        refresh.
       </p>
     </section>
   );

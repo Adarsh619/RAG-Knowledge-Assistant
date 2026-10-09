@@ -97,7 +97,11 @@ export async function handleExtractDocument(
       new Uint8Array(await file.arrayBuffer()),
     );
     return json({
-      document: { id: body.id, name: documentDisplayName(body.id) },
+      document: {
+        id: body.id,
+        name: documentDisplayName(body.id),
+        size: file.size,
+      },
       extraction,
       chunking: chunkDocument(body.id, extraction.pages),
     } satisfies ExtractionResponse);

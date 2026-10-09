@@ -167,6 +167,9 @@ export async function handleUploadDocument(
         contentType: PDF_MIME_TYPE,
         cacheControl: "0",
         upsert: false,
+        metadata: {
+          original_filename: file.name.split(/[\\/]/).pop()!.slice(0, 255),
+        },
       });
     if (uploadError)
       return error(

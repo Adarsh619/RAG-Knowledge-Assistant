@@ -54,9 +54,9 @@ export default function DashboardPage() {
               note: "History arrives in Phase 12",
             },
             {
-              label: "Indexed chunks",
+              label: "Knowledge base",
               icon: "grid",
-              note: "Inspect local chunks and embeddings in development",
+              note: "Persist chunks and local embeddings from Documents",
             },
           ] as const
         ).map((item) => (
@@ -66,7 +66,11 @@ export default function DashboardPage() {
               <Icon name={item.icon} className="text-slate-400" />
             </div>
             <p className="mt-4 text-3xl font-semibold">
-              {item.label === "Documents" ? "PDFs" : "0"}
+              {item.label === "Documents"
+                ? "PDFs"
+                : item.label === "Knowledge base"
+                  ? "pgvector"
+                  : "0"}
             </p>
             <p className="mt-2 text-xs text-slate-400">{item.note}</p>
           </div>
@@ -121,8 +125,9 @@ export default function DashboardPage() {
       </div>
       <p className="mt-6 text-xs leading-5 text-slate-400">
         Manage stored PDFs and inspect their text, chunks and local embeddings
-        on the Documents page. Conversation history and document indexing will
-        arrive in later phases. Chat runs locally in mock mode.
+        on the Documents page. Ingest saves chunks and local vectors to
+        PostgreSQL. Search and conversation history arrive later. Chat runs
+        locally in mock mode.
       </p>
     </>
   );
