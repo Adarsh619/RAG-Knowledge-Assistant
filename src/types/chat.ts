@@ -1,4 +1,4 @@
-import type { RagSummary } from "./rag.ts";
+import type { RagSource, RagSummary } from "./rag.ts";
 
 export type LlmMode = "mock" | "local" | "openai";
 
@@ -10,6 +10,7 @@ export interface ChatMessage {
   content: string;
   mode?: LlmMode;
   rag?: RagSummary;
+  sources?: RagSource[];
 }
 
 export interface ChatRequest {
@@ -21,6 +22,7 @@ export interface ChatResponse {
   mode: LlmMode;
   message: { role: "assistant"; content: string };
   rag?: RagSummary;
+  sources: RagSource[];
 }
 
 export interface ChatErrorResponse {

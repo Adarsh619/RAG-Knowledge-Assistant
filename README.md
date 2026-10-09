@@ -1,6 +1,6 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 10 — full local document RAG with the manually installed Ollama qwen3:4b-instruct model.** Earlier phase sections are historical; the Phase 10 section below describes current behavior and real-model validation.
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 11 — local document RAG with trustworthy source metadata and expandable evidence.** Earlier phase sections are historical; the Phase 11 section below describes the current source contract. The manually installed Ollama qwen3:4b-instruct model remains unchanged.
 
 ## Run locally
 
@@ -1003,3 +1003,102 @@ Full Documents refresh retained both ready metadata records and authentication w
 The user approved permanent deletion of exactly the two generated Phase 10 PDFs. The production Documents app removed both private Storage objects and both metadata rows, cascading all six chunks/embeddings. Read-only checks confirmed zero remaining fixture objects/documents/chunks, zero orphan chunks, the still-private bucket and the unchanged single Auth account. A fresh production chat question afterward returned insufficient context without generation, confirming deleted sources were no longer available; proof is `deleted-sources-proof.jpg`. No other PDF, record or account was deleted. Local ignored generated fixtures/proof artifacts remain available for review.
 
 Phase 10 is complete within the requested local RAG scope. Ownership was validated through deployed read-only authenticated identity emulation and automated contracts; there was no second real browser-account test. Phase 11 has not been started. No new database objects or policies, retrieval optimizations, persistent conversations, polished citations or installation/download operations were added.
+
+## Phase 11 — Source citations and evidence
+
+Phase 11 exposes the document passages actually supplied to local generation. Citations make answers inspectable; they do not automatically prove every generated claim. Generation creates answer text, while attribution identifies its input evidence. The application derives identity from authenticated retrieval, never from model-generated filenames, pages or inline markers. Physical page metadata preserved through extraction/chunking provides the PDF location.
+
+### Source contract and important code
+
+The existing `/api/chat` contract keeps `message.content` as the answer and adds `sources`:
+
+```typescript
+{
+  mode: "local",
+  message: { role: "assistant", content: "The training project is Cedar..." },
+  rag: { /* existing generation summary */ },
+  sources: [{
+    rank: 1, // one-based order in the context sent to Ollama
+    documentId: "...", chunkId: "...", originalFilename: "handbook.pdf",
+    chunkIndex: 0, // existing zero-based index
+    pageNumbers: [1, 3], similarity: 0.664,
+    excerpt: "Page one: learning handbook...", excerptTruncated: true
+  }]
+}
+```
+
+The illustrative IDs are placeholders. Actual excerpts contain copied source text, not the ellipsis shown above. `sources.ts` maps only `assembleRagPrompt(...).chunks`, after filtering, ranking, deduplication and context budgeting. A retrieved but skipped chunk cannot become a source. Each excerpt is an exact prefix of stored content, at most **360 UTF-16 characters**, preferably ending at whitespace and never cutting an emoji surrogate pair. `SOURCE_EXCERPT_CHARACTERS` is the adjustable display cap. Full passages still go to the local prompt; full chunks and vectors are not added to chat responses.
+
+`source-presentation.ts` groups by document UUID in first-context order, not filename. Two distinct documents with the same filename remain separate. Duplicate chunk UUIDs are removed, but different overlapping chunks remain as individual evidence records. One collapsed document card shows the union of its actual pages; expanding reveals each chunk's original pages, rank, index, score and excerpt. Only consecutive pages become a range: `[1,3]` displays **Pages 1, 3**, not **Pages 1–3**. Group labels `[1]`, `[2]` number the source list; they do not pretend to be model-produced claim-level citations.
+
+The source display says **Context supplied to the model**. Similarity is cosine relevance to the question, not a confidence percentage or entailment check. If retrieval supplies no usable context, `sources: []` accompanies the existing insufficient-context answer and Ollama is skipped. Mock mode also returns `sources: []`. When relevant passages exist but the local model says they lack a requested fact, its input evidence remains available under that honest context label; the application does not guess the model's intent using brittle answer-text matching. Inspect the passages to assess support.
+
+### Flow and security
+
+```text
+Authenticated question + optional document UUID
+  → existing local MiniLM query embedding
+  → owner-only pgvector RPC / RLS
+  → bounded selection of whole passages
+  → localhost Ollama qwen3:4b-instruct answer
+  → application maps those selected passages to structured sources
+  → answer and grouped, expandable evidence in Chat
+```
+
+The verified user's SSR client remains the retrieval boundary. The browser cannot submit source records, owner IDs or prompt context. No service-role key, signed/public PDF URL, new table, migration, policy, grant or function is introduced. React renders filenames/excerpts as plain text, not HTML. Sources stay in page memory with their answer; refreshing clears the conversation. An existing answer retains its historical source snapshot if a document is later deleted; a new question searches only current ready documents.
+
+### Files created or modified
+
+Created:
+
+- `src/lib/rag/sources.ts` — bounded exact excerpts and source attribution from selected context.
+- `src/lib/rag/source-presentation.ts` — document grouping and gap-safe page labels.
+- `src/components/chat/chat-sources.tsx` — collapsed source groups with per-chunk evidence.
+- `scripts/check-citations.mjs` — citation provenance, exclusion, grouping, Unicode and access contracts.
+- `scripts/create-citation-test-files.mjs` — generated known-content React/ocean PDFs.
+- `supabase/checks/check-phase-11-ownership.sql` — read-only deployed identity/RLS checks, not a migration.
+
+Modified:
+
+- `src/types/rag.ts`, `src/types/chat.ts` — structured source records on responses/messages.
+- `src/lib/rag/answer.ts`, `prompt.ts` — attach context-derived sources and discourage invented inline citations.
+- `src/lib/ai/chat-handler.ts` — return sources with the existing answer; empty sources in mock mode.
+- `src/components/chat/chat-workspace.tsx` — retain source records beside in-memory messages and render evidence.
+- `src/app/(protected)/chat/page.tsx`, `page.tsx`, `src/components/app-shell.tsx`, `src/components/documents/documents-workspace.tsx` — current Phase 11 capability text.
+- `scripts/check-rag.mjs`, `package.json` — updated response assertions and citation tests in the full suite.
+- `README.md`, `src/lib/ai/README.md`, `src/types/README.md` — learning and contract documentation.
+
+### How to test
+
+```powershell
+node scripts/create-citation-test-files.mjs
+npm run test:citations
+npm test
+npm run typecheck
+npm run lint -- --max-warnings=0
+npm run build
+```
+
+Use the existing installed runtime/model with `LLM_MODE=local`; no installation is necessary. Upload the generated `.setup-cache/phase-11/phase-11-react.pdf` and `phase-11-ocean.pdf` through Documents and ingest them. In Chat, ask **What is the React training project named, and what does useState do?** Expand Sources and check Cedar/useState, the original filename, three passage records and physical pages 1 and 3. Repeat in React-only scope. Try the ocean sanctuary/whales question in ocean-only scope, and an unrelated medieval-cathedral question in all-document scope: the latter should return insufficient context with no source section. A question about Cedar's annual budget tests a related passage that does not contain the requested fact.
+
+The read-only ownership check runs only while the generated fixtures are ingested. It emulates the owner and a different authenticated JWT identity in a read-only transaction and rolls back; it performs no `DROP`, `DELETE`, `TRUNCATE`, data-changing `UPDATE` or DDL. There is only one real account, so this does not claim a second real browser-account test.
+
+### Completed validation
+
+TypeScript checks, lint with zero warnings, the production build and all **169 automated tests** passed, including eight citation-specific tests. Existing tests cover authentication, private Storage/upload/delete, parsing, lossless page-aware chunking, real cached MiniLM inference, ingestion/re-ingestion, retrieval and mock chat. Citation tests cover source identity, exact/Unicode-safe bounded excerpts, context budget exclusions, duplicate IDs, overlapping evidence, page gaps, model-invented identity, empty-context behavior and forged-source rejection.
+
+The authenticated app uploaded and ingested the two generated PDFs, each to three chunks. Read-only database checks verified six finite stored vectors with dimension 384 and unit normalization. The normal session survived production-server restart and page refresh; persisted document choices remained available and temporary chat messages cleared. Cookie-free protected page requests redirected to login, while chat, documents, search, extraction, embedding and ingestion APIs returned 401.
+
+The known React question returned the supported Cedar/useState answer in all-document and React-only scope using three passages. Its source scores were **0.6645, 0.5743, 0.5113**, with actual physical page sets `[1]`, `[1,3]`, `[3]`. The grouped label correctly displayed **Pages 1, 3**. A DOM evidence snapshot was compared against read-only database chunk text: all three displayed excerpts were exact stored-text prefixes, with the expected filename and chunk indices.
+
+A supplemental check used a deployed owner-RLS RPC snapshot and the actual local MiniLM query adapter. It asserted that the exact three persisted passages and metadata were sent to localhost Ollama and that the returned structured sources matched them. Real generation used **943 prompt tokens**, **41 output tokens**, **3,381 context bytes** and approximately **3.84 seconds**, returning the supported Cedar/useState answer. This supplements the normal authenticated browser/API test, rather than replacing it. The production build independently returned that answer with expandable sources; proof is `.setup-cache/phase-11/production-citations.jpg`.
+
+Ocean-only scope returned **Blue Lantern** and **krill**, supported by the ocean PDF and its own source group. The all-document question **How does useState store component state, and what do baleen whales filter from seawater?** used five passages and showed two distinct source groups (three ocean passages, two React passages), returning supported facts from both. A differently worded combined question retrieved only ocean evidence at the unchanged 0.30 threshold; no React citations were fabricated. This illustrates that attribution accurately exposes retrieval inputs but cannot repair missing retrieval or guarantee generation quality.
+
+The unrelated medieval-cathedral question returned insufficient context with no generation or source section. The related annual-budget question retrieved one React passage; Ollama said the supplied context did not determine a budget. That relevant passage remained explicitly labeled as context supplied, without inventing a budget or its source. Existing no-context and error contracts remain intact.
+
+Deployed read-only role/JWT emulation returned six all-scope and three React-only results for the owner, and zero of the owner's results for another authenticated identity. That identity could not read document/chunk/Storage metadata; anonymous RPC execution and invalid vector/control arguments remained blocked. The second identity was synthetic because only one real account exists. Automated chat/citation contracts likewise returned no foreign filename, document ID, excerpt or pages when retrieval yielded no owned matches. No policies or grants were changed.
+
+The user approved permanent deletion of exactly `phase-11-react.pdf` and `phase-11-ocean.pdf`. The production Documents app removed both PDFs and metadata records, cascading all six chunks/embeddings. Read-only checks found zero remaining fixture files/rows/chunks and zero orphan chunks; the bucket remains private and the single Auth account is intact. A fresh production React question afterward returned insufficient context with no generation and zero source sections, confirming deleted documents cannot supply new citations; proof is `deleted-sources-proof.jpg`. Local ignored fixtures, synthetic text snapshots and proof artifacts remain for review/regeneration. No other file, record or account was deleted.
+
+`LLM_MODE=local`, the reviewed `qwen3:4b-instruct` model and the loopback-only origin were verified without printing credentials. `.env.local` is still ignored/untracked. Supabase reports `free` / `tier_free`. No installation, model download, OpenAI request/usage, hosted inference or paid API/feature occurred. No schema migration, conversation persistence or Phase 12 work was introduced. Phase 11 is complete within the requested evidence-presentation scope; sources expose input provenance, not automatic claim-level verification.

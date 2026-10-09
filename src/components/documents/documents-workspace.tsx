@@ -632,7 +632,7 @@ export function DocumentsWorkspace() {
         PDFs are stored privately. Ingest saves document metadata, chunks and
         local embeddings in PostgreSQL. Extract text opens a temporary preview.
         Re-ingest replaces stored chunks atomically. Use the retrieval inspector
-        to examine matching passages. AI answers with sources arrive in later phases.
+        to examine matching passages. Open Chat for local document answers with expandable sources.
       </p>
     </>
   );

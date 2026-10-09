@@ -190,7 +190,7 @@ test("Phase 10 RAG preparation: real local embeddings, fixture RPC/generation, n
         assert.equal((await handleChatRequest(request(body), context(), fail)).status, 400);
       assert.equal((await handleChatRequest(request({ message: "x".repeat(25000) }), context(), fail)).status, 413);
     });
-    await t.test("chat returns only an answer and summary; sources/vectors/history stay out of the response", async () => {
+    await t.test("chat returns bounded source evidence with the answer; vectors/history stay out", async () => {
       const response = await handleChatRequest(request({ message: input().question, documentId: reactId }), context(),
         (query, ctx, options) => answerFromDocuments(query, ctx, { ...options, provider }));
       assert.equal(response.status, 200);
@@ -199,7 +199,10 @@ test("Phase 10 RAG preparation: real local embeddings, fixture RPC/generation, n
       assert.equal(data.mode, "local");
       assert.equal(data.rag.status, "generated");
       assert.equal(data.rag.contextChunkCount, 1);
-      assert.equal(data.sources, undefined);
+      assert.equal(data.sources.length, 1);
+      assert.equal(data.sources[0].documentId, reactId);
+      assert.deepEqual(data.sources[0].pageNumbers, [1, 3]);
+      assert.ok(rows[0].content.startsWith(data.sources[0].excerpt));
       assert.equal(data.chunks, undefined);
       assert.equal(data.vector, undefined);
       assert.equal(data.history, undefined);
