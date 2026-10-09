@@ -25,7 +25,10 @@
     "test:ingestion:fixtures": "node scripts/create-ingestion-test-files.mjs",
     "test:retrieval": "node --conditions=react-server --test scripts/check-retrieval.mjs",
     "test:retrieval:fixtures": "node scripts/create-retrieval-test-files.mjs",
-    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs scripts/check-retrieval.mjs"
+    "local:check": "node --conditions=react-server scripts/check-local-runtime.mjs",
+    "test:rag": "node --conditions=react-server --test scripts/check-rag.mjs",
+    "test:rag:fixtures": "node scripts/create-rag-test-files.mjs",
+    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs scripts/check-retrieval.mjs scripts/check-rag.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",

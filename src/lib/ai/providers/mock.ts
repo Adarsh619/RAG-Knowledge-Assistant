@@ -11,7 +11,7 @@ export const mockProvider: LlmProvider = {
     return [
       "Local mock response — no AI model was called.",
       `The backend received your message: “${message}”`,
-      "Your message traveled through the chat API and the mock provider. This is a development confirmation, not an AI answer. Document retrieval is not connected yet.",
+      "Your message traveled through the chat API and the mock provider. This is a development confirmation, not an AI answer. Mock mode does not retrieve documents; document answers require explicitly configured local RAG mode.",
     ].join("\n\n");
   },
 };

@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Icon } from "@/components/ui/icon";
 import { MAX_MESSAGE_LENGTH } from "@/types/chat";
+import { RAG_LIMITS } from "@/lib/rag/config";
+import type { StoredDocument, DocumentListResponse } from "@/types/document";
 import type {
   ChatMessage,
   ChatRequest,
@@ -25,13 +27,50 @@ export function ChatWorkspace({
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
   const isMock = configuredMode === "mock";
+  const isLocal = configuredMode === "local";
+  const messageLimit = isLocal ? RAG_LIMITS.maxQuestionCharacters : MAX_MESSAGE_LENGTH;
+  const [documents, setDocuments] = useState<StoredDocument[]>([]);
+  const [documentId, setDocumentId] = useState("");
+  const [listOffset, setListOffset] = useState(0);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const chatRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => { chatRequest.current?.abort(); }, []);
+  useEffect(() => {
+    if (!isLocal) return; // Mock mode needs neither document listing nor inference.
+    const controller = new AbortController();
+    async function load() {
+      setLoadingDocuments(true);
+      setDocumentError(null);
+      try {
+        const response = await fetch(`/api/documents?offset=${listOffset}`, {
+          cache: "no-store", signal: controller.signal,
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "Document choices could not be loaded.");
+        if (controller.signal.aborted) return;
+        const data = body as DocumentListResponse;
+        setDocuments((current) => listOffset === 0 ? data.documents : [...current, ...data.documents]);
+        setNextOffset(data.nextOffset);
+      } catch (cause) {
+        if (!controller.signal.aborted)
+          setDocumentError(cause instanceof Error ? cause.message : "Document choices could not be loaded.");
+      } finally {
+        if (!controller.signal.aborted) setLoadingDocuments(false);
+      }
+    }
+    void load();
+    return () => controller.abort();
+  }, [isLocal, listOffset]);
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = draft.trim();
     if (!message || sending.current) return;
-    if (message.length > MAX_MESSAGE_LENGTH) {
-      setError(`Keep messages to ${MAX_MESSAGE_LENGTH} characters or fewer.`);
+    if (message.length > messageLimit) {
+      setError(`Keep messages to ${messageLimit} characters or fewer.`);
       return;
     }
 
@@ -46,11 +85,17 @@ export function ChatWorkspace({
     ]);
 
     try {
+      const controller = new AbortController();
+      chatRequest.current = controller;
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message } satisfies ChatRequest),
-        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          message, ...(isLocal ? { documentId: documentId || null } : {}),
+        } satisfies ChatRequest),
+        signal: AbortSignal.any([
+          controller.signal, AbortSignal.timeout(isLocal ? 150000 : 15000),
+        ]),
       });
       const data: ChatResponse | ChatErrorResponse = await response.json();
       if (!response.ok) {
@@ -62,14 +107,14 @@ export function ChatWorkspace({
       }
       if (
         !("message" in data) ||
-        (data.mode !== "mock" && data.mode !== "openai") ||
+        (data.mode !== "mock" && data.mode !== "local") ||
         typeof data.message?.content !== "string"
       ) {
         throw new Error("The server returned an unexpected response.");
       }
       setMessages((current) => [
         ...current,
-        { id: crypto.randomUUID(), ...data.message, mode: data.mode },
+        { id: crypto.randomUUID(), ...data.message, mode: data.mode, rag: data.rag },
       ]);
     } catch (caught) {
       setDraft(message);
@@ -111,7 +156,7 @@ export function ChatWorkspace({
             ? "Provider disabled · no external LLM calls"
             : isMock
               ? "Mock mode · no external LLM calls"
-              : "OpenAI mode"}
+              : "Local RAG · Ollama · no hosted AI calls"}
         </span>
       </div>
 
@@ -121,7 +166,7 @@ export function ChatWorkspace({
           className="border-b border-amber-100 bg-amber-50 px-6 py-4 text-sm text-amber-900"
         >
           {configuredMode === "openai"
-            ? "OpenAI is disabled in Phase 2."
+            ? "OpenAI remains disabled."
             : "The configured LLM_MODE is unsupported."}{" "}
           Set LLM_MODE=mock and restart the server.
         </p>
@@ -136,11 +181,14 @@ export function ChatWorkspace({
             Try your first local message.
           </h2>
           <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">
-            Send a message through the backend and receive a local development
-            confirmation. These replies are generated by code, not an AI model.
+            {isLocal
+              ? "Ask about your ingested documents. The server retrieves owned passages and asks your local Ollama model to answer from them."
+              : "Send a message through the backend and receive a local development confirmation. These replies are generated by code, not an AI model."}
           </p>
           <div className="mt-8 grid w-full max-w-xl gap-3 sm:grid-cols-2">
-            {["Hello, backend!", "What happens when I send a message?"].map(
+            {(isLocal
+              ? ["What does my document say about React hooks?", "Summarize the main topic of my document."]
+              : ["Hello, backend!", "What happens when I send a message?"]).map(
               (text) => (
                 <button
                   key={text}
@@ -178,11 +226,18 @@ export function ChatWorkspace({
                     ? "You"
                     : message.mode === "mock"
                       ? "Assistant · local mock"
-                      : "Assistant · OpenAI"}
+                      : message.rag?.status === "insufficient_context"
+                        ? "Documents · insufficient context · no generation"
+                        : "Assistant · local Ollama"}
                 </p>
                 <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">
                   {message.content}
                 </p>
+                {message.rag?.status === "generated" && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Local model: {message.rag.model} · {message.rag.contextChunkCount} passages used
+                  </p>
+                )}
               </div>
             </div>
           ))}
@@ -194,12 +249,31 @@ export function ChatWorkspace({
         aria-live="polite"
         className="px-6 text-xs text-slate-500"
       >
-        {loading && <p className="pb-4">Creating a local mock response…</p>}
+        {loading && <p className="pb-4">{isLocal
+          ? "Retrieving your passages and generating locally… CPU/model loading can take a moment."
+          : "Creating a local mock response…"}</p>}
       </div>
       <form
         onSubmit={sendMessage}
         className="border-t border-slate-100 bg-slate-50/50 p-5"
       >
+        {isLocal && (
+          <div className="mb-4">
+            <label htmlFor="chat-document" className="mb-1 block text-xs font-medium text-slate-600">Document scope</label>
+            <select id="chat-document" value={documentId} disabled={loading || loadingDocuments}
+              onChange={(event) => setDocumentId(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+              <option value="">All my ready documents</option>
+              {documents.filter((document) => document.ingestion?.status === "ready").map((document) => (
+                <option key={document.ingestion!.id} value={document.ingestion!.id}>{document.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Only ingested, ready documents are searched. Each question is independent; earlier chat messages are not sent to the model.</p>
+            {documentError && <p role="alert" className="mt-1 text-xs text-red-700">{documentError} All-document search remains available.</p>}
+            {nextOffset !== null && <button type="button" disabled={loading || loadingDocuments}
+              onClick={() => setListOffset(nextOffset)} className="mt-2 text-xs font-semibold text-emerald-800">Load more document choices</button>}
+          </div>
+        )}
         <label htmlFor="question" className="sr-only">
           Your message
         </label>
@@ -210,9 +284,9 @@ export function ChatWorkspace({
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
             disabled={loading || !providerEnabled}
-            maxLength={MAX_MESSAGE_LENGTH}
+            maxLength={messageLimit}
             rows={2}
-            placeholder="Send a local test message…"
+            placeholder={isLocal ? "Ask about your ingested documents…" : "Send a local test message…"}
             aria-describedby="chat-status chat-hint"
             className="min-w-0 flex-1 resize-none bg-transparent p-1 text-sm placeholder:text-slate-400 disabled:opacity-70"
           />
@@ -232,14 +306,14 @@ export function ChatWorkspace({
         )}
         <p id="chat-hint" className="mt-3 text-center text-xs text-slate-400">
           Enter to send · Shift+Enter for a new line ·{" "}
-          {MAX_MESSAGE_LENGTH.toLocaleString()} characters max
+          {messageLimit.toLocaleString()} characters max
         </p>
         <p
           id="chat-status"
           className="mt-2 text-center text-xs leading-5 text-slate-500"
         >
-          Phase 2 · Mock development only. Messages stay in this page’s memory
-          and clear on refresh. No documents are retrieved.
+          {isLocal ? "Phase 10 · Local document RAG." : "Mock development only. No documents are retrieved."}
+          {" "}Messages stay in this page’s memory and clear on refresh.
         </p>
       </form>
     </section>

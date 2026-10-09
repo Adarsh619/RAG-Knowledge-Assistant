@@ -30,8 +30,11 @@ test("Phase 2 chat contract and zero outbound requests", async (t) => {
   syncBuiltinESMExports();
 
   try {
-    const { handleChatRequest: POST } =
+    const { handleChatRequest } =
       await import("../src/lib/ai/chat-handler.ts");
+    const POST = (request) => handleChatRequest(request, {
+      repository: { search: async () => { assert.fail("Mock/OpenAI must not retrieve documents"); } },
+    });
     const { getLlmMode, getLlmProvider } =
       await import("../src/lib/ai/provider.ts");
     const { mockProvider } = await import("../src/lib/ai/providers/mock.ts");
@@ -52,7 +55,7 @@ test("Phase 2 chat contract and zero outbound requests", async (t) => {
         assert.equal(getLlmMode(), "mock");
         const response = await POST(request({ message: "  Hello backend  " }));
         assert.equal(response.status, 200);
-        assert.equal(response.headers.get("Cache-Control"), "no-store");
+        assert.match(response.headers.get("Cache-Control"), /private, no-store/);
         const data = await response.json();
         assert.equal(data.mode, "mock");
         assert.equal(data.message.role, "assistant");
@@ -95,6 +98,7 @@ test("Phase 2 chat contract and zero outbound requests", async (t) => {
         const response = await POST(
           new Request("http://localhost/api/chat", {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: "{invalid json",
           }),
         );
