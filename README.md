@@ -1,6 +1,6 @@
 # Groundwork — RAG Knowledge Assistant
 
-A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 11 — local document RAG with trustworthy source metadata and expandable evidence.** Earlier phase sections are historical; the Phase 11 section below describes the current source contract. The manually installed Ollama qwen3:4b-instruct model remains unchanged.
+A learning and portfolio project built incrementally with Next.js, TypeScript, and Tailwind CSS. **Current scope: Phase 12 — persistent local RAG conversations with saved source evidence.** Earlier phase sections are historical; the Phase 12 section describes the current history behavior. The manually installed Ollama qwen3:4b-instruct model remains unchanged.
 
 ## Run locally
 
@@ -24,15 +24,15 @@ LLM_MODE=mock
 
 ## What works now
 
-- `/`: dashboard with links to the private library and knowledge-base capabilities; conversation count remains a placeholder.
-- `/chat`: working mock chat by default; explicitly configured local mode connects authenticated retrieval, grounded context and a loopback-only Ollama provider, with all-document/single-document scope.
+- `/`: dashboard with links to the private library, saved conversations and knowledge-base capabilities.
+- `/chat`: saved conversations with New Chat, history, reopen, retry, deletion and expandable original evidence. Mock remains the default; explicitly configured local mode connects authenticated retrieval, grounded context and loopback-only Ollama, with all-document/single-document scope.
 - `/documents`: private PDF upload/listing, local extraction, chunk and embedding inspection, persistent ingestion/re-ingestion, coordinated owner deletion and a semantic retrieval inspector.
 - Shared responsive navigation, active-page indication, and skip-to-content link.
-- `/login` and `/signup`: email/password authentication; application pages, chat API, and document API require a verified session.
+- `/login` and `/signup`: email/password authentication; application pages and chat, conversation and document APIs require a verified session.
 
-Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters in mock mode or 1,000 in local RAG mode. Rapid duplicate sends are blocked while waiting. A failed request restores the draft for retry. Each request sends only the current question; earlier conversation messages are not model context.
+Enter sends a message; Shift+Enter adds a new line. Empty/whitespace-only messages are blocked in both the UI and API. Messages are limited to 4,000 characters in mock mode or 1,000 in local RAG mode. Rapid duplicate sends are blocked while waiting. A failed saved question offers Retry reply with the same request ID. Refresh history checks uncertain outcomes before resending. Each request sends only the current question; earlier conversation messages are not model context.
 
-Chat messages live in React state only. Refreshing or leaving chat clears them. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. **Ingest** persists document metadata, chunk text/pages/offsets and local 384-dimensional embeddings in PostgreSQL. Extraction/embedding previews, retrieval questions/results and generated answers exist only in request/React memory. Public embedding model files are cached in ignored `.setup-cache`. OCR, polished citations and conversation persistence remain outside this phase.
+Conversations, user questions, assistant answers and original citation snapshots persist in PostgreSQL. The selected conversation URL restores history after reload. Supabase Auth owns user/session records and the SSR SDK maintains session cookies. PDFs persist in private Storage. **Ingest** persists document metadata, chunk text/pages/offsets and local 384-dimensional embeddings. Extraction/embedding previews and retrieval-inspector inputs/results remain temporary. Public embedding model files are cached in ignored `.setup-cache`. OCR and deployment/hardening remain outside this phase.
 
 ## Files created or modified in Phase 2 (historical locations)
 
@@ -1102,3 +1102,88 @@ Deployed read-only role/JWT emulation returned six all-scope and three React-onl
 The user approved permanent deletion of exactly `phase-11-react.pdf` and `phase-11-ocean.pdf`. The production Documents app removed both PDFs and metadata records, cascading all six chunks/embeddings. Read-only checks found zero remaining fixture files/rows/chunks and zero orphan chunks; the bucket remains private and the single Auth account is intact. A fresh production React question afterward returned insufficient context with no generation and zero source sections, confirming deleted documents cannot supply new citations; proof is `deleted-sources-proof.jpg`. Local ignored fixtures, synthetic text snapshots and proof artifacts remain for review/regeneration. No other file, record or account was deleted.
 
 `LLM_MODE=local`, the reviewed `qwen3:4b-instruct` model and the loopback-only origin were verified without printing credentials. `.env.local` is still ignored/untracked. Supabase reports `free` / `tier_free`. No installation, model download, OpenAI request/usage, hosted inference or paid API/feature occurred. No schema migration, conversation persistence or Phase 12 work was introduced. Phase 11 is complete within the requested evidence-presentation scope; sources expose input provenance, not automatic claim-level verification.
+
+## Phase 12 — Persistent conversations and original evidence
+
+PostgreSQL now preserves chats across reloads. A conversation is the owned parent with a deterministic title and last-used document scope; its ordered messages are the one-to-many children. The title is the first question with whitespace normalized and a 72-character limit. No title-generation model call occurs.
+
+Assistant messages keep a bounded JSON `sources` snapshot rather than a separate source table. Each entry retains document UUID, original filename, chunk UUID/index, physical pages, similarity, rank, exact shortened excerpt and truncation flag. JSON avoids another join and preserves the original evidence after re-ingestion or PDF deletion. Reload reads the saved answer/evidence; it never re-runs retrieval to reconstruct citations. Historical excerpts remain in your conversation after deleting a PDF; delete the conversation to remove those excerpts too.
+
+### Schema and permissions
+
+The reviewed migration is `supabase/migrations/20261009212314_conversation_persistence.sql`:
+
+- `conversations`: UUID, authenticated owner FK, title, optional document UUID snapshot, turn counter, creation/update dates.
+- `messages`: UUID, conversation FK, request UUID, turn index, role, content, pending/completed/failed status, attempt UUID, document scope, provider mode, JSON sources/RAG summary and dates.
+- Conversation deletion cascades to its messages. Document IDs are snapshots without foreign keys: deleting/replacing document records cannot erase chat evidence or silently switch a saved scope to all documents. An unavailable saved scope requires an explicit new selection before another scoped question.
+- Unique keys prevent duplicate user/assistant rows for a request and duplicate roles in a turn. A partial unique index allows only one pending user question per conversation. The recent-history index supports owner/date ordering; message unique keys index the parent FK.
+- RLS protects conversations by `owner_id = auth.uid()` and messages through the owned parent. Anonymous/public privileges are revoked. Authenticated users have SELECT/INSERT and conversation DELETE; column UPDATE grants are restricted to parent title/scope/counter/date and question status/start/attempt. There is no direct message DELETE grant and no content/evidence UPDATE grant.
+- `begin_conversation_turn` and `complete_conversation_turn` are authenticated-only, `SECURITY INVOKER` functions with an empty search path. They respect the caller's session/RLS. No service-role credential is used.
+
+The migration has no DROP, DELETE, TRUNCATE or unscoped UPDATE. Its six scoped UPDATE statements exist inside the two functions and execute only for an authenticated turn. Applying the migration creates schema/permissions; it does not edit existing documents, chunks, Storage objects or Auth records. The previous migrations and ownership policies are retained.
+
+### Request and failure flow
+
+```text
+Authenticated browser → create/open owned conversation
+  → POST /api/conversations/{id}/messages with question, scope, request UUID
+  → validate identity/origin/input/provider
+  → begin_conversation_turn: save pending question and release transaction lock
+  → existing local MiniLM embedding → owned pgvector search → bounded grounded context
+  → localhost Ollama / qwen3:4b-instruct → answer + application source metadata
+  → complete_conversation_turn: atomically insert assistant/evidence and complete question
+  → return saved message IDs → refresh/read history from PostgreSQL
+```
+
+The database lock is held only during the short begin/complete transactions, never while embeddings or Ollama run. A repeated completed request UUID returns its original answer without regeneration. Reusing a UUID for changed text/scope is rejected. Failed generation marks its question failed and inserts no assistant. Retry reply reuses that question UUID with a new attempt token. The token prevents a stale generation attempt from completing a newer retry. An interrupted pending turn can be retried after a five-minute lease; this allows server restarts/transport failures to recover. If the completion response is lost, Refresh history reconciles the saved result before a retry. A completed reply cannot be downgraded by a later failure update.
+
+**Conversation persistence is display/history continuity, not model memory.** Each new question still uses only its own question and retrieved document context. Older assistant output is not evidence for the next answer. Follow-up questions must name their subject explicitly. A bounded recent-message memory can be introduced deliberately later; no memory, history embeddings or additional prompt tokens are added here.
+
+The stateless `/api/chat` handler remains available for compatibility and its existing tests. The chat UI uses the persistent endpoint. Both paths share validation and the same RAG/mock handler. Browser requests cannot supply owner IDs, citations, internal prompts, modes or generated answers. Saved metadata is input provenance, not a cryptographic attestation of generation; authenticated database users can insert records in their own conversations under the granted privileges.
+
+### UI and manual checks
+
+New Chat creates an owned conversation. Its first question names it automatically. Your conversations lists 20 recent items with Load more. Open restores the newest 50 messages; Load earlier messages retrieves older pages. The selected UUID is in the URL so reload restores that chat. Document scope is restored from the parent; each individual message keeps the scope used for that question. Refresh history updates saved state. Failed/expired questions offer Retry reply. Delete requires an inline confirmation and permanently removes that conversation/evidence while keeping PDFs.
+
+Use `node scripts/create-conversation-test-files.mjs` to generate only ignored public-text fixtures. Upload/ingest them through Documents, then create a chat and ask “What is the React training project named, and what does useState do?”. Reload the selected URL: the same answer and expandable original sources should remain. Select the React PDF and ask a second standalone question. Create another chat for the Ocean PDF, then switch between the two. An unrelated question should save the insufficient-context explanation with no sources. Only delete intended disposable conversations/PDFs. Deleting a source PDF retains historical citations but excludes it from future retrieval.
+
+Checks: `npm run typecheck`, `npm run lint`, `npm run build`, `npm test`; focused history checks: `npm run test:conversations`. No new dependency, model download, environment setting, deployment setup or paid service is needed.
+
+### Files
+
+Created:
+
+- `supabase/migrations/20261009212314_conversation_persistence.sql` — tables, constraints, indexes, RLS, grants and atomic turn functions.
+- `src/types/conversation.ts` — saved-history contracts and pagination/lease constants.
+- `src/lib/conversations/repository.ts`, `handler.ts`, `context.ts` — authenticated persistence, request lifecycle and SSR client context.
+- `src/app/api/conversations/route.ts`, `[conversationId]/route.ts`, `[conversationId]/messages/route.ts` — list/create/read/delete/send routes.
+- `src/components/chat/conversation-history.tsx` — history, selection and deletion confirmation.
+- `scripts/check-conversations.mjs` — persistence protocol and real SDK adapter checks with offline fixtures.
+- `scripts/create-conversation-test-files.mjs` — generated public PDF fixtures.
+
+Modified:
+
+- `src/components/chat/chat-workspace.tsx` — persistent selection, messages, scopes, retry and original citations.
+- `src/lib/ai/chat-handler.ts` — shared pre-persistence validation; original mock/local pipeline retained.
+- `src/lib/supabase/middleware.ts`, `src/middleware.ts`, `scripts/check-auth.mjs` — conversation API session refresh and protection checks.
+- `src/app/(protected)/chat/page.tsx`, `src/app/(protected)/page.tsx`, `src/components/app-shell.tsx` — current capability labels.
+- `package.json` — focused history test and full-suite inclusion.
+- `README.md` — current architecture, behavior, limits and verification instructions.
+
+Environment files, dependency versions/lockfile, document schema, Storage policies and local model settings are unchanged. Phase 13 is not started.
+
+### Phase 12 verification
+
+TypeScript checks, lint and the production build passed. All 191 automated checks passed, including 22 persistence checks. The new checks cover input/auth/origin rejection before persistence, question-before-generation ordering, original citation restoration, completed-request replay without another model call, pending-turn exclusion, failed replies and same-ID retries, completion failure, recovery after a lost committed response, insufficient-context sources, mock mode without network access, foreign-conversation rejection and the actual SDK's filtered mutations. No dependency was installed.
+
+Live testing used only the existing authenticated account and generated public-text PDFs. Two separate conversations stored five question/answer pairs (ten messages). React all-document and single-document questions produced supported Cedar/useState/useEffect answers. The unrelated Florence question persisted the insufficient-context response with zero sources. The built production app also generated and saved the supported state-setter answer using the existing localhost `qwen3:4b-instruct`. Reload restored the exact answers, selected scope and expandable evidence after the app/server restart. Opening another conversation kept its messages separate.
+
+Read-only checks matched saved source filenames, physical pages, chunk indexes and exact excerpts to the chunks supplied to generation. Re-ingestion retained the document UUID and three normalized 384-dimensional embeddings while replacing chunk UUIDs; the original answer/source JSON fingerprint stayed unchanged even when none of its original chunk UUIDs remained in the current chunk table. Extraction/chunk inspection still showed three physical pages, a blank page 2, 2,475 extracted characters and three chunks under the unchanged 1,200/200-character settings.
+
+Deployed authenticated-role testing with a different JWT subject saw zero conversations, messages, documents or chunks. Both turn functions rejected the foreign conversation before persistence. Offline API/SDK checks also cover denied foreign writes/deletion and narrowly filtered failure updates. This is database identity emulation plus automated contracts, not a second real browser-account test. Cookie-free requests to conversation list/detail, chat and document APIs returned 401; the normal session survived refresh and server restart.
+
+The existing Supabase organization still reports `free` / `tier_free`. Local provider model/origin validation is unchanged and generation used loopback-only Ollama. No OpenAI request, hosted inference, model download, paid API, paid Supabase feature or environment-file change occurred. `.env.local` remains ignored and untracked. Existing unrelated Supabase advisor findings were retained; the Phase 12 tables/functions introduced no security-advisor finding.
+
+The user approved permanent cleanup of only the two named generated PDFs and two generated conversations. Deleting the Ocean conversation cascaded its four messages while both private PDFs and document records remained. Deleting both PDFs then removed their metadata/six chunks while the React conversation retained all six messages and its exact historical evidence. Reloaded source excerpts still expanded. A new request using the deleted saved scope was rejected with the draft retained, zero additional messages and no automatic switch to all-document scope. Deleting the React conversation finally cascaded its remaining six messages and cleared the active chat. Final read-only checks found zero generated conversations/messages/documents/chunks/PDFs; the private bucket, original account and application tables were preserved. Refresh restored the clean history state. No other data was deleted.
+
+Phase 12 is complete within the requested persistent-chat scope. The ignored `.setup-cache/phase-12/production-evidence.jpg` records the verified saved-history UI before approved cleanup. Phase 13 has not started.

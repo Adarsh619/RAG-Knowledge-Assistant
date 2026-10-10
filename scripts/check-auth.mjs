@@ -167,6 +167,8 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
       async () => {
         for (const [path, message] of [
           ["/api/chat", "Sign in to use chat."],
+          ["/api/conversations", "Sign in to use chat."],
+          ["/api/conversations/00000000-0000-4000-8000-000000000001/messages", "Sign in to use chat."],
           ["/api/documents", "Sign in to manage documents."],
           ["/api/documents/extract", "Sign in to manage documents."],
           ["/api/documents/embed", "Sign in to manage documents."],
@@ -270,6 +272,8 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
           "/chat",
           "/documents",
           "/api/chat",
+          "/api/conversations",
+          "/api/conversations/00000000-0000-4000-8000-000000000001/messages",
           "/api/documents",
           "/api/documents/extract",
           "/api/documents/embed",

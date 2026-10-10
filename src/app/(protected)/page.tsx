@@ -51,7 +51,7 @@ export default function DashboardPage() {
             {
               label: "Conversations",
               icon: "chat",
-              note: "History arrives in Phase 12",
+              note: "Resume saved questions, answers and source evidence",
             },
             {
               label: "Knowledge base",
@@ -70,7 +70,7 @@ export default function DashboardPage() {
                 ? "PDFs"
                 : item.label === "Knowledge base"
                   ? "pgvector"
-                  : "0"}
+                  : "Saved"}
             </p>
             <p className="mt-2 text-xs text-slate-400">{item.note}</p>
           </div>
