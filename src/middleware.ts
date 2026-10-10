@@ -13,6 +13,7 @@ export const config = {
     "/login",
     "/signup",
     "/api/chat",
+    "/api/conversations/:path*",
     "/api/documents/:path*",
   ],
 };

@@ -28,8 +28,9 @@
     "local:check": "node --conditions=react-server scripts/check-local-runtime.mjs",
     "test:rag": "node --conditions=react-server --test scripts/check-rag.mjs",
     "test:rag:fixtures": "node scripts/create-rag-test-files.mjs",
-    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs scripts/check-retrieval.mjs scripts/check-rag.mjs scripts/check-citations.mjs",
-    "test:citations": "node --conditions=react-server --test scripts/check-citations.mjs"
+    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs scripts/check-retrieval.mjs scripts/check-rag.mjs scripts/check-citations.mjs scripts/check-conversations.mjs",
+    "test:citations": "node --conditions=react-server --test scripts/check-citations.mjs",
+    "test:conversations": "node --conditions=react-server --test scripts/check-conversations.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",

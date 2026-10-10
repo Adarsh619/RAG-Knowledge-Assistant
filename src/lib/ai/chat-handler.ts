@@ -18,6 +18,31 @@ function errorResponse(error: string, status: number) {
   });
 }
 
+/** Shared by stateless chat and persisted turns; validate before saving a question. */
+export function validateChatInput(body: unknown) {
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw new InputError("A message must be provided as text.", 400);
+  const input = body as Record<string, unknown>;
+  if (Object.keys(input).some((key) => !["message", "documentId"].includes(key)))
+    throw new InputError("Unsupported chat field.", 400);
+  if (typeof input.message !== "string" || !input.message.trim())
+    throw new InputError("Enter a message before sending.", 400);
+  const message = input.message.trim();
+  if (message.length > MAX_MESSAGE_LENGTH)
+    throw new InputError(`Keep messages to ${MAX_MESSAGE_LENGTH} characters or fewer.`, 400);
+  const mode = getLlmMode();
+  if (!mode) throw new LocalLlmError("Unsupported LLM_MODE. Set LLM_MODE=mock and restart the server.");
+  const provider = getLlmProvider();
+  if (!provider.enabled) throw new LocalLlmError(OPENAI_DISABLED_MESSAGE);
+  const search = mode === "local" ? parseSearchInput({
+    question: message, documentId: input.documentId,
+    topK: RAG_LIMITS.topK, minSimilarity: RAG_LIMITS.minSimilarity,
+  }) : null;
+  if (!search && input.documentId !== undefined && input.documentId !== null)
+    throw new InputError("Document scope is available only in local RAG mode.", 400);
+  return { message, mode, provider, search };
+}
+
 export async function handleChatRequest(
   request: Request,
   context: SearchContext | null,
@@ -32,37 +57,14 @@ export async function handleChatRequest(
     let body: unknown;
     try { body = JSON.parse(new TextDecoder().decode(bytes)); }
     catch { throw new InputError("Send a valid JSON body containing a message.", 400); }
-    if (!body || typeof body !== "object" || Array.isArray(body))
-      throw new InputError("A message must be provided as text.", 400);
-    const input = body as Record<string, unknown>;
-    if (Object.keys(input).some((key) => !["message", "documentId"].includes(key)))
-      throw new InputError("Unsupported chat field.", 400);
-    if (typeof input.message !== "string" || !input.message.trim())
-      throw new InputError("Enter a message before sending.", 400);
-    const message = input.message.trim();
-    if (message.length > MAX_MESSAGE_LENGTH)
-      throw new InputError(`Keep messages to ${MAX_MESSAGE_LENGTH} characters or fewer.`, 400);
-
-    const mode = getLlmMode();
-    if (!mode) return errorResponse("Unsupported LLM_MODE. Set LLM_MODE=mock and restart the server.", 503);
-    const provider = getLlmProvider();
-    if (!provider.enabled) return errorResponse(OPENAI_DISABLED_MESSAGE, 503);
-
-    if (mode === "local") {
-      const search = parseSearchInput({
-        question: message,
-        documentId: input.documentId,
-        topK: RAG_LIMITS.topK,
-        minSimilarity: RAG_LIMITS.minSimilarity,
-      });
+    const { message, mode, provider, search } = validateChatInput(body);
+    if (search) {
       const result = await runRag(search, context, { provider, signal: request.signal });
       return Response.json({
         mode, message: { role: "assistant", content: result.content }, rag: result.rag, sources: result.sources,
       } satisfies ChatResponse, { headers: { "Cache-Control": "private, no-store" } });
     }
     // Mock mode deliberately performs no retrieval, embedding or inference.
-    if (input.documentId !== undefined && input.documentId !== null)
-      throw new InputError("Document scope is available only in local RAG mode.", 400);
     const content = await provider.reply(message);
     return Response.json({
       mode: provider.mode, message: { role: "assistant", content }, sources: [],

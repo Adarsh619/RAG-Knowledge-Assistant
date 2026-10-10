@@ -16,7 +16,7 @@ export default function ChatPage() {
         eyebrow="ASK. EXPLORE. UNDERSTAND."
         title="Chat with your knowledge."
         description={mode === "local"
-          ? "Ask questions grounded in your ingested documents using a model running on your machine."
+          ? "Ask your local model about your documents, then reload and resume your saved conversations."
           : "Mock chat remains active. The local document RAG pipeline is prepared for manual Ollama setup."}
       />
       <ChatWorkspace
@@ -26,7 +26,7 @@ export default function ChatPage() {
       <div className="mt-5 flex items-start gap-3 rounded-xl border border-dashed border-slate-200 p-4 text-xs leading-5 text-slate-500">
         <Icon name="file" className="shrink-0 text-slate-400" />
         <p>
-          Expand Sources below a document-based answer to inspect its supporting passages and PDF pages. {mode === "local"
+          Questions, answers and original source evidence are saved to your account. Expand Sources to inspect the passages used for that answer. {mode === "local"
             ? "Local mode uses your owned passages and sends no context to hosted AI services."
             : "Mock mode does not access documents or run a model. Install Ollama and the documented model manually before enabling LLM_MODE=local."}
         </p>

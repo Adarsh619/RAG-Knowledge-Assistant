@@ -46,6 +46,8 @@ export async function updateSession(request: NextRequest) {
   if (
     !signedIn &&
     (pathname === "/api/chat" ||
+      pathname === "/api/conversations" ||
+      pathname.startsWith("/api/conversations/") ||
       pathname === "/api/documents" ||
       pathname.startsWith("/api/documents/"))
   ) {
@@ -53,7 +55,7 @@ export async function updateSession(request: NextRequest) {
       NextResponse.json(
         {
           error:
-            pathname === "/api/chat"
+            pathname === "/api/chat" || pathname.startsWith("/api/conversations")
               ? "Sign in to use chat."
               : "Sign in to manage documents.",
         },
