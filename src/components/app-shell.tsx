@@ -51,7 +51,7 @@ export function AppShell({
                 key={href}
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex flex-1 items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition lg:flex-none ${active ? "bg-emerald-50 text-emerald-900" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}
+                className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-3 text-xs font-medium transition sm:px-3 sm:text-sm lg:flex-none lg:gap-3 ${active ? "bg-emerald-50 text-emerald-900" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}
               >
                 <Icon name={icon} />
                 <span>{label}</span>
@@ -62,17 +62,17 @@ export function AppShell({
         <div className="mt-auto hidden pt-10 lg:block">
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
             <span className="text-xs font-semibold text-emerald-900">
-              Built to learn, step by step.
+              Private documents. Clear evidence.
             </span>
             <p className="mt-2 text-xs leading-5 text-slate-500">
-              Phase 12 · Saved chats
+              Saved conversations
               <br />
               Private PDFs. Document answers with your configured local model.
             </p>
           </div>
           <div className="mt-5 flex items-center gap-3 px-2">
             <span className="flex size-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-              LW
+              {userEmail.slice(0, 2).toUpperCase()}
             </span>
             <div>
               <p className="max-w-36 truncate text-xs font-semibold">
@@ -96,7 +96,7 @@ export function AppShell({
           </span>
           <div className="flex items-center gap-4">
             <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 sm:block">
-              Phase 12 · Saved chats
+              Private workspace
             </span>
             <SignOutButton />
           </div>

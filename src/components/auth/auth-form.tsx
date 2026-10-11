@@ -104,7 +104,7 @@ export function AuthForm({
       </h1>
       <p className="mt-3 text-sm leading-6 text-slate-500">
         {signingUp
-          ? "Start with an email and password. Your documents will find their home here in later phases."
+          ? "Create your private workspace for documents, grounded answers and saved conversations."
           : "Sign in to your dashboard, local chat, and document workspace."}
       </p>
       <form onSubmit={handleSubmit} className="mt-7 space-y-5">
@@ -185,9 +185,9 @@ export function AuthForm({
       </p>
       {!signingUp && <ResendConfirmationForm next={destination} />}
       <p className="mt-6 border-t border-slate-100 pt-5 text-center text-xs leading-5 text-slate-400">
-        Phase 3 · Supabase email authentication
+        Your documents and conversations belong to your account.
         <br />
-        Chat continues to use local mock responses.
+        AI generation runs locally when local mode is configured.
       </p>
     </div>
   );

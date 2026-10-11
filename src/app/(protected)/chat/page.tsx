@@ -17,7 +17,7 @@ export default function ChatPage() {
         title="Chat with your knowledge."
         description={mode === "local"
           ? "Ask your local model about your documents, then reload and resume your saved conversations."
-          : "Mock chat remains active. The local document RAG pipeline is prepared for manual Ollama setup."}
+          : "Demo replies help you explore the interface. Document answers require local AI mode."}
       />
       <ChatWorkspace
         configuredMode={mode}
@@ -28,7 +28,7 @@ export default function ChatPage() {
         <p>
           Questions, answers and original source evidence are saved to your account. Expand Sources to inspect the passages used for that answer. {mode === "local"
             ? "Local mode uses your owned passages and sends no context to hosted AI services."
-            : "Mock mode does not access documents or run a model. Install Ollama and the documented model manually before enabling LLM_MODE=local."}
+            : "Mock mode does not access documents or run a model. Follow the local setup guide to enable document answers."}
         </p>
       </div>
     </>

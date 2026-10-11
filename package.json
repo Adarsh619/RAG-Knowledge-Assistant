@@ -28,15 +28,17 @@
     "local:check": "node --conditions=react-server scripts/check-local-runtime.mjs",
     "test:rag": "node --conditions=react-server --test scripts/check-rag.mjs",
     "test:rag:fixtures": "node scripts/create-rag-test-files.mjs",
-    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs scripts/check-retrieval.mjs scripts/check-rag.mjs scripts/check-citations.mjs scripts/check-conversations.mjs",
+    "test": "node --conditions=react-server --test scripts/check-chat.mjs scripts/check-auth.mjs scripts/check-storage.mjs scripts/check-pdf.mjs scripts/check-chunking.mjs scripts/check-embeddings.mjs scripts/check-embedding-model.mjs scripts/check-ingestion.mjs scripts/check-retrieval.mjs scripts/check-rag.mjs scripts/check-citations.mjs scripts/check-conversations.mjs scripts/check-hardening.mjs",
     "test:citations": "node --conditions=react-server --test scripts/check-citations.mjs",
-    "test:conversations": "node --conditions=react-server --test scripts/check-conversations.mjs"
+    "test:conversations": "node --conditions=react-server --test scripts/check-conversations.mjs",
+    "release:check": "node --conditions=react-server scripts/check-release.mjs",
+    "test:hardening": "node --conditions=react-server --test scripts/check-hardening.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "4.3.1",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
-    "next": "15.5.26",
+    "next": "15.5.27",
     "pdf-parse": "2.4.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -49,8 +51,16 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "15.5.26",
+    "eslint-config-next": "15.5.27",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.29"
+    }
   }
 }

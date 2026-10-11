@@ -14,15 +14,15 @@ export function ConversationHistory({ conversations, selectedId, busy, nextOffse
       <button type="button" disabled={busy} onClick={onNew}
         className="rounded-lg bg-emerald-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">New Chat</button>
     </div>
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
       {conversations.map(conversation => <div key={conversation.id} data-conversation-id={conversation.id}
         className={`rounded-xl border p-3 ${selectedId === conversation.id ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}>
         <button type="button" disabled={busy} onClick={() => onOpen(conversation.id)}
           aria-current={selectedId === conversation.id ? "true" : undefined}
-          className="block w-full text-left text-sm font-medium text-slate-700 disabled:opacity-50">{conversation.title}</button>
+          className="block min-h-10 w-full text-left text-sm font-medium text-slate-700 wrap-anywhere disabled:opacity-50">{conversation.title}</button>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <span>{new Date(conversation.updatedAt).toLocaleString()}</span>
-          {confirmId === conversation.id ? <span className="flex gap-3">
+          {confirmId === conversation.id ? <span className="flex flex-wrap gap-3">
             <button type="button" disabled={busy} onClick={() => { setConfirmId(null); onDelete(conversation.id); }}
               className="font-semibold text-red-700">Confirm delete conversation</button>
             <button type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>

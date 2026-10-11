@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     template: "%s | Groundwork",
   },
   description:
-    "A document-based knowledge assistant built one phase at a time.",
+    "A private document knowledge assistant with local AI, verifiable sources and saved conversations.",
 };
 
 export default function RootLayout({

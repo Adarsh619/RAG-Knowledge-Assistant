@@ -6,6 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { ExtractionPreview } from "./extraction-preview";
 import { ChunkPreview } from "./chunk-preview";
 import { RetrievalInspector } from "./retrieval-inspector";
+import { readApiResponse } from "@/lib/http/client-response";
 import type { ExtractionResponse } from "@/types/extraction";
 import type { EmbeddingResponse } from "@/types/embedding";
 import {
@@ -18,13 +19,6 @@ import type {
   DocumentMutationResponse,
   StoredDocument,
 } from "@/types/document";
-
-async function readResponse<T>(response: Response): Promise<T> {
-  const body = await response.json();
-  if (!response.ok)
-    throw new Error(body.error ?? "The document request failed.");
-  return body as T;
-}
 
 export function DocumentsWorkspace() {
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
@@ -69,7 +63,7 @@ export function DocumentsWorkspace() {
         cache: "no-store",
         signal: controller.signal,
       });
-      const body = await readResponse<DocumentListResponse>(response);
+      const body = await readApiResponse<DocumentListResponse>(response);
       if (controller.signal.aborted) return;
       setDocuments((current) =>
         offset === 0
@@ -130,7 +124,7 @@ export function DocumentsWorkspace() {
         method: "POST",
         body: form,
       });
-      const body = await readResponse<DocumentMutationResponse>(response);
+      const body = await readApiResponse<DocumentMutationResponse>(response);
       setSuccess(body.message);
       setSelectedFile(null);
       if (fileInput.current) fileInput.current.value = "";
@@ -159,7 +153,7 @@ export function DocumentsWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      const body = await readResponse<DocumentMutationResponse>(response);
+      const body = await readApiResponse<DocumentMutationResponse>(response);
       setSuccess(body.message);
       setConfirmDeleteId(null);
       setExtraction((current) =>
@@ -199,7 +193,7 @@ export function DocumentsWorkspace() {
         cache: "no-store",
         signal: controller.signal,
       });
-      const body = await readResponse<ExtractionResponse>(response);
+      const body = await readApiResponse<ExtractionResponse>(response);
       if (!controller.signal.aborted) setExtraction(body);
     } catch (cause) {
       if (!controller.signal.aborted) {
@@ -232,7 +226,7 @@ export function DocumentsWorkspace() {
         cache: "no-store",
         signal: controller.signal,
       });
-      const body = await readResponse<EmbeddingResponse>(response);
+      const body = await readApiResponse<EmbeddingResponse>(response);
       if (!controller.signal.aborted) setEmbedding(body);
     } catch (cause) {
       if (!controller.signal.aborted)
@@ -268,7 +262,7 @@ export function DocumentsWorkspace() {
         cache: "no-store",
         signal: controller.signal,
       });
-      const body = await readResponse<DocumentMutationResponse>(response);
+      const body = await readApiResponse<DocumentMutationResponse>(response);
       if (!controller.signal.aborted) setSuccess(body.message);
     } catch (cause) {
       if (!controller.signal.aborted) {
@@ -437,7 +431,8 @@ export function DocumentsWorkspace() {
         )}
         {documents.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="document-table w-full text-left text-sm" role="table" aria-label="Private PDF library">
+              <caption className="sr-only">Your PDFs, processing state and document actions</caption>
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
                   <th className="px-6 py-3 font-medium">File name</th>
@@ -450,26 +445,26 @@ export function DocumentsWorkspace() {
               <tbody className="divide-y divide-slate-100">
                 {documents.map((document) => (
                   <tr key={document.id}>
-                    <td className="max-w-72 px-6 py-5">
+                    <td data-label="File" className="max-w-72 px-6 py-5">
                       <div className="flex items-center gap-3">
                         <Icon
                           name="file"
                           className="shrink-0 text-emerald-700"
                         />
-                        <span className="break-words font-medium">
+                        <span className="min-w-0 font-medium wrap-anywhere">
                           {document.name}
                         </span>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-5 text-slate-500">
+                    <td data-label="Size" className="whitespace-nowrap px-4 py-5 text-slate-500">
                       {formatFileSize(document.size)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-5 text-xs text-slate-500">
+                    <td data-label="Uploaded" className="whitespace-nowrap px-4 py-5 text-xs text-slate-500">
                       {document.uploadedAt
                         ? new Date(document.uploadedAt).toLocaleString()
                         : "Date unavailable"}
                     </td>
-                    <td className="min-w-56 px-4 py-5 text-xs leading-5 text-slate-500">
+                    <td data-label="Status" className="min-w-56 px-4 py-5 text-xs leading-5 text-slate-500">
                       <p className="font-semibold text-slate-700">
                         {ingestingId === document.id
                           ? "Processing…"
@@ -510,11 +505,11 @@ export function DocumentsWorkspace() {
                         </p>
                       )}
                     </td>
-                    <td className="px-6 py-5">
+                    <td data-label="Actions" className="px-6 py-5">
                       {confirmDeleteId === document.id ? (
                         <div className="flex min-w-36 flex-wrap gap-3">
                           <p className="w-full text-xs text-slate-500">
-                            Permanently delete this PDF and its stored chunks?
+                            Permanently delete this PDF and its indexed content? Saved chat excerpts are kept until those conversations are deleted.
                           </p>
                           <button
                             type="button"
@@ -602,11 +597,15 @@ export function DocumentsWorkspace() {
           </div>
         )}
       </section>
+      <details className="panel mt-6 p-5">
+        <summary className="text-sm font-semibold text-emerald-800">Explore search evidence</summary>
+        <p className="mt-2 text-xs leading-5 text-slate-500">Optional learning tools for inspecting the passages found before answer generation.</p>
       <RetrievalInspector
         key={documents.map((document) => `${document.id}:${document.ingestion?.status}:${document.ingestion?.processedAt}`).join("|")}
         documents={documents}
         disabled={busy || loadingList}
       />
+      </details>
 
       {extraction && (
         <>

@@ -15,7 +15,9 @@ export function getSupabaseConfig() {
     );
   }
   try {
-    if (new URL(url).protocol !== "https:") throw new Error();
+    const endpoint = new URL(url);
+    if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password ||
+        endpoint.pathname !== "/" || endpoint.search || endpoint.hash) throw new Error();
   } catch {
     throw new Error(
       "NEXT_PUBLIC_SUPABASE_URL must be a valid HTTPS project URL.",

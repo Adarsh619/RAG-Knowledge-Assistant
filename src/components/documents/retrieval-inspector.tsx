@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import type { StoredDocument } from "@/types/document";
 import type { SearchResponse } from "@/types/retrieval";
 import { SEARCH_DEFAULTS, SEARCH_LIMITS } from "@/lib/retrieval/config";
+import { readApiResponse } from "@/lib/http/client-response";
 
 export function RetrievalInspector({ documents, disabled }: {
   documents: StoredDocument[];
@@ -44,8 +45,7 @@ export function RetrievalInspector({ documents, disabled }: {
           minSimilarity: Number(threshold),
         }),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Document search failed.");
+      const body = await readApiResponse<SearchResponse>(response);
       if (!controller.signal.aborted) setResult(body as SearchResponse);
     } catch (cause) {
       if (!controller.signal.aborted)
@@ -107,7 +107,7 @@ export function RetrievalInspector({ documents, disabled }: {
         {!result.matches.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No chunks meet this threshold in the selected scope. Check that documents are ready, or lower the threshold to inspect weaker matches.</p>}
         {result.matches.map((chunk, index) => <article key={chunk.chunkId} className="rounded-xl border border-slate-200 p-4">
           <div className="flex flex-wrap justify-between gap-2 text-sm font-semibold text-slate-800">
-            <h3>Rank {index + 1} · {chunk.originalFilename}</h3>
+            <h3 className="min-w-0 wrap-anywhere">Rank {index + 1} · {chunk.originalFilename}</h3>
             <span>Similarity {chunk.similarity.toFixed(4)}</span>
           </div>
           <p className="mt-2 text-xs text-slate-500">Chunk {chunk.chunkIndex} · Pages {chunk.pageNumbers.join(", ")} · {chunk.characterCount} characters · Offsets [{chunk.startOffset}, {chunk.endOffset})</p>
