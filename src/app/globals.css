@@ -21,6 +21,44 @@ textarea {
 button:disabled {
   cursor: not-allowed;
 }
+button:not(:disabled), summary {
+  cursor: pointer;
+}
+html {
+  scroll-padding-top: 1rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}
+@media (max-width: 767px) {
+  /* Preserve one labelled table, while stacking each PDF as a mobile card. */
+  .document-table, .document-table tbody, .document-table tr, .document-table td {
+    display: block;
+    width: 100%;
+  }
+  .document-table thead { display: none; }
+  .document-table tr { padding: 0.75rem 1.25rem; }
+  .document-table td {
+    min-width: 0;
+    max-width: none;
+    padding: 0.5rem 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .document-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #64748b;
+  }
+  input, textarea, select { font-size: 1rem; }
+}
 ::selection {
   background: #c8eee1;
 }

@@ -48,7 +48,7 @@ Documents: Extract text → inspect chunks → Generate local embeddings
   → Temporary React state; selected chunk shows its first eight values
 ```
 
-The browser cannot supply another owner's path, source text, or chunks. The handler reuses the existing secure extraction pipeline and never uses a service-role key. Storage policies provide the independent ownership boundary. An inaccessible PDF returns the existing generic error before any model call. No application table, schema change, vector column, persistent embedding cache, search, or RAG prompt is needed.
+The browser cannot supply another owner's path, source text, or chunks. The handler reuses the existing secure extraction pipeline and never uses a service-role key. Storage policies provide the independent ownership boundary. An inaccessible PDF returns the existing generic error before any model call. The temporary embedding inspector does not persist results. The knowledge pipeline separately persists vectors, and the query adapter shares this model for retrieval.
 
 The **embedding inspector is visible only under `npm run dev`**. It reports model, dimension, count, batches, initialization/reuse, and the selected chunk's token count and first eight values. Full vectors exist temporarily in the response and React state; refresh, navigation, closing the preview, re-extraction, or deletion of the matching document clears them. `npm start` hides this inspection UI, while the authenticated endpoint retains the same server-side protections. Model files remain cached on disk; document-derived results do not.
 
@@ -72,4 +72,4 @@ The related pair scored **0.742234**, while the unrelated pair scored **0.000506
 
 For a live check, upload the generated `phase-7-embedding-test.pdf` from `.setup-cache/embedding-tests/` using your normal session. Extract it, inspect every chunk, then generate embeddings twice. Verify 384 dimensions, all chunks embedded, page 2 omitted from text metadata, and model reuse on the second request. Refresh should preserve the stored PDF and clear all previews. Delete only a disposable fixture through the app with the appropriate approval.
 
-`LLM_MODE=mock` stays unchanged. Neither the embedding code nor these tests call OpenAI or a hosted inference API. No paid provider, Supabase upgrade, or paid processing service is used.
+The embedding layer is independent of mock/local generative mode. Neither the embedding code nor these tests call OpenAI or a hosted inference API. No paid provider, Supabase upgrade, or paid processing service is used.

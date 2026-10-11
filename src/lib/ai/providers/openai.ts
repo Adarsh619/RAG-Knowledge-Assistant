@@ -2,7 +2,7 @@ import "server-only";
 import type { LlmProvider } from "../../../types/chat.ts";
 
 export const OPENAI_DISABLED_MESSAGE =
-  "OpenAI is disabled in Phase 2. Set LLM_MODE=mock and restart the server to use local chat. No external request was made.";
+  "OpenAI is disabled. Set LLM_MODE=mock for demo replies or LLM_MODE=local for localhost Ollama, then restart the server. No external request was made.";
 
 export const openaiProvider: LlmProvider = {
   mode: "openai",

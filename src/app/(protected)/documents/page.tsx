@@ -11,7 +11,7 @@ export default function DocumentsPage() {
       <PageHeader
         eyebrow="YOUR SOURCE OF TRUTH"
         title="Document library"
-        description="Upload and manage the private PDFs that will power your knowledge assistant."
+        description="Upload private PDFs, ingest them for search, and manage the sources behind your answers."
         action={
           <a href="#pdf-upload" className="primary-link">
             <Icon name="upload" /> Add PDF

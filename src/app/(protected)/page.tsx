@@ -27,8 +27,8 @@ export default function DashboardPage() {
           into understanding.
         </h2>
         <p className="relative mt-4 max-w-md text-sm leading-6 text-emerald-100/70">
-          We’re building a place to ask better questions and trace every answer
-          back to its source.
+          Ask questions about your private PDFs, inspect the evidence behind
+          each answer, and return to your saved conversations.
         </p>
         <Link
           href="/documents"
@@ -38,7 +38,7 @@ export default function DashboardPage() {
         </Link>
       </section>
       <section
-        aria-label="Workspace statistics"
+        aria-label="Workspace capabilities"
         className="mt-6 grid gap-4 sm:grid-cols-3"
       >
         {(
@@ -101,7 +101,7 @@ export default function DashboardPage() {
         <section className="panel p-6">
           <h2 className="font-semibold">The path to your first answer</h2>
           <p className="mt-2 text-xs text-slate-500">
-            We’ll connect each piece as we learn.
+            Four steps from a private PDF to a grounded answer.
           </p>
           <ol className="mt-6 space-y-5">
             {[
@@ -127,8 +127,8 @@ export default function DashboardPage() {
         Manage stored PDFs and inspect their text, chunks and local embeddings
         on the Documents page. Ingest saves chunks and local vectors to
         PostgreSQL. Semantic retrieval is available there. Local document RAG is
-        available in Chat with expandable source evidence; conversation history arrives later. Chat defaults
-        to mock mode until local generation is explicitly enabled.
+        available in Chat with expandable source evidence and saved conversations.
+        Local AI requires Ollama running on the same computer as this application.
       </p>
     </>
   );
