@@ -11,6 +11,8 @@ import { RetrievalError } from "../retrieval/repository.ts";
 import { parseSearchInput } from "../retrieval/input.ts";
 import { RAG_LIMITS } from "../rag/config.ts";
 import { answerFromDocuments } from "../rag/answer.ts";
+import { answerGenerally } from "./general.ts";
+import type { ChatMode } from "../../types/chat.ts";
 
 function errorResponse(error: string, status: number) {
   return Response.json({ error } satisfies ChatErrorResponse, {
@@ -23,7 +25,7 @@ export function validateChatInput(body: unknown) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     throw new InputError("A message must be provided as text.", 400);
   const input = body as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !["message", "documentId"].includes(key)))
+  if (Object.keys(input).some((key) => !["message", "documentId", "chatMode"].includes(key)))
     throw new InputError("Unsupported chat field.", 400);
   if (typeof input.message !== "string" || !input.message.trim())
     throw new InputError("Enter a message before sending.", 400);
@@ -34,19 +36,24 @@ export function validateChatInput(body: unknown) {
   if (!mode) throw new LocalLlmError("Unsupported LLM_MODE. Set LLM_MODE=mock and restart the server.");
   const provider = getLlmProvider();
   if (!provider.enabled) throw new LocalLlmError(OPENAI_DISABLED_MESSAGE);
+  const chatMode = input.chatMode ?? "documents";
+  if (!["documents", "general", "auto"].includes(chatMode as string))
+    throw new InputError("Select a valid chat mode.", 400);
+  // Validate scope even when general mode will not retrieve it. Persistence still checks ownership.
   const search = mode === "local" ? parseSearchInput({
     question: message, documentId: input.documentId,
     topK: RAG_LIMITS.topK, minSimilarity: RAG_LIMITS.minSimilarity,
   }) : null;
   if (!search && input.documentId !== undefined && input.documentId !== null)
     throw new InputError("Document scope is available only in local RAG mode.", 400);
-  return { message, mode, provider, search };
+  return { message, mode, provider, search, chatMode: chatMode as ChatMode };
 }
 
 export async function handleChatRequest(
   request: Request,
   context: SearchContext | null,
   runRag = answerFromDocuments,
+  runGeneral = answerGenerally,
 ) {
   if (!context) return errorResponse("Sign in to use chat.", 401);
   if (!isSameOrigin(request)) return errorResponse("Cross-site chat is not allowed.", 403);
@@ -57,9 +64,15 @@ export async function handleChatRequest(
     let body: unknown;
     try { body = JSON.parse(new TextDecoder().decode(bytes)); }
     catch { throw new InputError("Send a valid JSON body containing a message.", 400); }
-    const { message, mode, provider, search } = validateChatInput(body);
-    if (search) {
-      const result = await runRag(search, context, { provider, signal: request.signal });
+    const { message, mode, provider, search, chatMode } = validateChatInput(body);
+    if (mode === "local") {
+      const documentResult = chatMode !== "general" && search
+        ? await runRag(search, context, { provider, signal: request.signal }) : null;
+      // Auto falls back only on a successful, explicitly insufficient retrieval result.
+      // Auth, retrieval, embedding or runtime errors never trigger a fallback.
+      const result = documentResult && !(chatMode === "auto" && documentResult.rag.status === "insufficient_context")
+        ? { ...documentResult, rag: { ...documentResult.rag, chatMode } }
+        : await runGeneral(message, provider, chatMode, request.signal);
       return Response.json({
         mode, message: { role: "assistant", content: result.content }, rag: result.rag, sources: result.sources,
       } satisfies ChatResponse, { headers: { "Cache-Control": "private, no-store" } });

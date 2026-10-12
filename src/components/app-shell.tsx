@@ -1,113 +1,101 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/icon";
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import { AccountMenu } from "@/components/account-menu";
+import { QuickThemeSwitcher } from "@/components/theme-provider";
+import { ShellContext, AiBadge } from "@/components/shell-context";
+import { readApiResponse } from "@/lib/http/client-response";
+import type { AiStatus } from "@/types/ai-status";
 
 const navigation = [
-  { href: "/", label: "Overview", icon: "grid" },
+  { href: "/", label: "Workspace", icon: "grid" },
   { href: "/chat", label: "Chat", icon: "chat" },
   { href: "/documents", label: "Documents", icon: "file" },
 ] as const;
 
-export function AppShell({
-  children,
-  userEmail,
-}: {
-  children: ReactNode;
-  userEmail: string;
-}) {
+export function AppShell({ children, userEmail, emailVerified = false }: { children: ReactNode; userEmail: string; emailVerified?: boolean }) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [newChatHost, setNewChatHost] = useState<HTMLDivElement | null>(null);
+  const [historyHost, setHistoryHost] = useState<HTMLDivElement | null>(null);
+  const [contextHost, setContextHost] = useState<HTMLDivElement | null>(null);
+  const [ai, setAi] = useState<AiStatus | null>(null);
+  const [aiLoading, setAiLoading] = useState(true);
+  const aiRequest = useRef<AbortController | null>(null);
+  const sidebar = useRef<HTMLElement>(null);
+  const context = useRef<HTMLElement>(null);
+  const closeNavigation = useCallback(() => setNavOpen(false), []);
+  const openContext = useCallback(() => { setRightOpen(true); setNavOpen(false); try { localStorage.setItem("groundwork.context", "open"); } catch {} }, []);
+  const refreshAi = useCallback(async () => {
+    aiRequest.current?.abort();
+    const controller = new AbortController(); aiRequest.current = controller; setAiLoading(true);
+    try {
+      const response = await fetch("/api/ai/status", { signal: controller.signal, cache: "no-store" });
+      const status = await readApiResponse<AiStatus>(response);
+      if (!controller.signal.aborted) setAi(status);
+    } catch { if (!controller.signal.aborted) setAi(null); }
+    finally { if (!controller.signal.aborted) setAiLoading(false); }
+  }, []);
+  useEffect(() => {
+    void refreshAi();
+    const media = matchMedia("(max-width: 1023px)");
+    const update = () => { setMobile(media.matches); setNavOpen(false); setRightOpen(false); };
+    setMobile(media.matches);
+    try { setCollapsed(localStorage.getItem("groundwork.sidebar") === "collapsed"); if (!media.matches) setRightOpen(localStorage.getItem("groundwork.context") === "open"); } catch {}
+    media.addEventListener("change", update);
+    return () => { media.removeEventListener("change", update); aiRequest.current?.abort(); };
+  }, [refreshAi]);
+  useEffect(() => { setNavOpen(false); if (mobile) setRightOpen(false); }, [pathname, mobile]);
+  useEffect(() => {
+    if (!mobile || (!navOpen && !rightOpen)) return;
+    const panel = navOpen ? sidebar.current : context.current;
+    const previous = document.activeElement as HTMLElement | null;
+    const focusable = () => Array.from(panel?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input, select, textarea, summary, [tabindex="0"]') ?? []).filter(element => element.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    function key(event: KeyboardEvent) {
+      if (document.querySelector("dialog[open]")) return;
+      if (event.key === "Escape") { event.preventDefault(); setNavOpen(false); setRightOpen(false); }
+      if (event.key !== "Tab") return;
+      const items = focusable(); const first = items[0]; const last = items.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !panel?.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !panel?.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+    }
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("keydown", key); if (!document.querySelector("dialog[open]")) previous?.focus(); };
+  }, [mobile, navOpen, rightOpen]);
 
-  return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
-      <aside className="flex flex-col border-b border-slate-200 bg-white px-5 py-6 lg:sticky lg:top-0 lg:h-screen lg:border-r lg:border-b-0">
-        <Link href="/" className="flex items-center gap-3 px-2">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-emerald-800 text-white">
-            <Icon name="book" />
-          </span>
-          <span>
-            <span className="block text-lg font-bold tracking-tight">
-              Groundwork
-            </span>
-            <span className="text-xs text-slate-500">
-              Your knowledge assistant
-            </span>
-          </span>
-        </Link>
-        <p className="mt-10 hidden px-3 text-[10px] font-bold tracking-[0.18em] text-slate-400 lg:block">
-          WORKSPACE
-        </p>
-        <nav
-          aria-label="Main navigation"
-          className="mt-5 flex gap-2 lg:flex-col"
-        >
-          {navigation.map(({ href, label, icon }) => {
-            const active = pathname === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-3 text-xs font-medium transition sm:px-3 sm:text-sm lg:flex-none lg:gap-3 ${active ? "bg-emerald-50 text-emerald-900" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}
-              >
-                <Icon name={icon} />
-                <span>{label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="mt-auto hidden pt-10 lg:block">
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
-            <span className="text-xs font-semibold text-emerald-900">
-              Private documents. Clear evidence.
-            </span>
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Saved conversations
-              <br />
-              Private PDFs. Document answers with your configured local model.
-            </p>
-          </div>
-          <div className="mt-5 flex items-center gap-3 px-2">
-            <span className="flex size-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-              {userEmail.slice(0, 2).toUpperCase()}
-            </span>
-            <div>
-              <p className="max-w-36 truncate text-xs font-semibold">
-                {userEmail}
-              </p>
-              <p className="mt-1 text-[11px] text-slate-400">
-                Authenticated workspace
-              </p>
-            </div>
-          </div>
+  function toggleSidebar() { setCollapsed(value => { try { localStorage.setItem("groundwork.sidebar", value ? "expanded" : "collapsed"); } catch {} return !value; }); }
+  function toggleContext() { setRightOpen(value => { try { localStorage.setItem("groundwork.context", value ? "closed" : "open"); } catch {} return !value; }); setNavOpen(false); }
+  const title = navigation.find(item => item.href === pathname)?.label ?? (pathname === "/account" ? "Account" : pathname === "/settings" ? "Settings" : "Workspace");
+  return <ShellContext.Provider value={{ historyHost, contextHost, newChatHost, openContext, closeNavigation, ai, aiLoading, refreshAi }}>
+    <div className={`workspace-shell ${pathname === "/chat" ? "chat-route" : ""} ${collapsed ? "nav-collapsed" : ""} ${rightOpen ? "context-open" : ""} ${navOpen ? "nav-open" : ""}`}>
+      {mobile && (navOpen || rightOpen) && <div className="drawer-backdrop" aria-hidden="true" onClick={() => { setNavOpen(false); setRightOpen(false); }} />}
+      <aside ref={sidebar} id="workspace-navigation" className="workspace-sidebar" role={mobile && navOpen ? "dialog" : undefined} aria-modal={mobile && navOpen ? true : undefined} aria-label="Workspace navigation" inert={mobile && !navOpen ? true : undefined}>
+        <div className="sidebar-brand"><Link href="/" aria-label="Groundwork workspace" className="brand-mark"><Icon name="book" /></Link><span className="sidebar-label"><strong>Groundwork</strong><small>YOUR KNOWLEDGE, CONNECTED</small></span>
+          <button className="icon-button mobile-only" aria-label="Close navigation" onClick={closeNavigation}><Icon name="close" /></button>
         </div>
+        <nav aria-label="Main navigation" className="primary-navigation">
+          {navigation.map(item => <span key={item.href} className="nav-tooltip" data-tooltip={item.label}><Link href={item.href} title={item.label} aria-label={item.label} aria-current={pathname === item.href ? "page" : undefined} className="nav-link" onClick={closeNavigation}><Icon name={item.icon} /><span className="sidebar-label">{item.label}</span></Link></span>)}
+        </nav>
+        <div ref={setNewChatHost} className="sidebar-new-chat nav-tooltip" data-tooltip="New chat">{pathname !== "/chat" && <Link href="/chat" className="new-chat-button" aria-label="New chat" title="New chat" onClick={closeNavigation}><Icon name="plus" /><span className="sidebar-label">New Chat</span></Link>}</div>
+        <div className="sidebar-scroll sidebar-label"><div ref={setHistoryHost} />{pathname !== "/chat" && <div className="sidebar-note"><Icon name="shield" /><p>A little clarity.<br /><strong>A lot of possibility.</strong></p><small>Your private documents. Answers with evidence.</small></div>}</div>
+        <AccountMenu email={userEmail} verified={emailVerified} sidebar />
       </aside>
-      <div className="min-w-0">
-        <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 lg:px-10">
-          <span className="text-xs text-slate-500">
-            Workspace <span className="mx-2 text-slate-300">/</span>{" "}
-            <span className="text-slate-800">
-              {navigation.find((item) => item.href === pathname)?.label ??
-                "Page"}
-            </span>
-          </span>
-          <div className="flex items-center gap-4">
-            <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800 sm:block">
-              Private workspace
-            </span>
-            <SignOutButton />
-          </div>
-        </header>
-        <main
-          id="main-content"
-          className="mx-auto max-w-7xl px-5 py-8 md:px-8 lg:px-10 lg:py-10"
-        >
-          {children}
-        </main>
+      <div className="workspace-main" inert={mobile && (navOpen || rightOpen) ? true : undefined}>
+        <header className="workspace-topbar"><div className="topbar-start"><button className="icon-button desktop-only" title={collapsed ? "Open sidebar" : "Close sidebar"} onClick={toggleSidebar} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} aria-controls="workspace-navigation"><Icon name={collapsed ? "expand" : "collapse"} /></button><button className="icon-button mobile-only" title="Open navigation" onClick={() => { setNavOpen(true); setRightOpen(false); }} aria-label="Open navigation" aria-expanded={navOpen} aria-controls="workspace-navigation"><Icon name="menu" /></button>
+          <nav aria-label="Breadcrumb"><ol className="breadcrumbs"><li><Link href="/" aria-current={pathname === "/" ? "page" : undefined}>Workspace</Link></li>{pathname !== "/" && <><li aria-hidden="true"><Icon name="chevron" width="13" height="13" /></li><li aria-current="page">{title}</li></>}</ol></nav></div>
+          <div className="topbar-end"><span className="topbar-ai"><AiBadge /></span><QuickThemeSwitcher /><button className="icon-button" title={rightOpen ? "Close context panel" : "Open context panel"} onClick={toggleContext} aria-label={rightOpen ? "Close context panel" : "Open context panel"} aria-expanded={rightOpen} aria-controls="workspace-context"><Icon name="panel" /></button><AccountMenu email={userEmail} verified={emailVerified} /></div>
+        </header><main id="main-content" className="workspace-content">{children}</main>
       </div>
+      <aside ref={context} id="workspace-context" className="workspace-context" inert={!rightOpen ? true : undefined} role={mobile && rightOpen ? "dialog" : undefined} aria-modal={mobile && rightOpen ? true : undefined} aria-label="Context panel" onKeyDown={event => { if (event.key === "Escape") setRightOpen(false); }}>
+        <div className="context-heading"><span>CONTEXT</span><button className="icon-button" aria-label="Close context drawer" onClick={toggleContext}><Icon name="close" /></button></div><div ref={setContextHost} className="context-content" />
+        {pathname === "/" && <div className="context-content"><h2>Your private workspace</h2><p>Upload a PDF, process it for AI, then start a conversation. Every grounded answer includes the passages used.</p><AiBadge /><p>PDFs and saved conversations use your private account. AI processing runs on this computer.</p></div>}
+      </aside>
     </div>
-  );
+  </ShellContext.Provider>;
 }

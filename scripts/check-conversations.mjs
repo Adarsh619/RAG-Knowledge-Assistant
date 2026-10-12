@@ -81,7 +81,7 @@ test("persistent chat protocol with all external fetch blocked", async t => {
       const { context, rows } = fixture(); const rid = randomUUID();
       const response = await handleConversationTurn(request({ message: "React?", requestId: rid, documentId: doc }), context, id, async req => {
         assert.equal(rows.get(rid).user.status, "pending");
-        assert.deepEqual(await req.json(), { message: "React?", documentId: doc }); // No history or client evidence sent.
+        assert.deepEqual(await req.json(), { message: "React?", documentId: doc, chatMode: "documents" }); // No history or client evidence sent.
         return Response.json(answer);
       });
       const saved = await response.json();
@@ -96,6 +96,22 @@ test("persistent chat protocol with all external fetch blocked", async t => {
       const first = await (await handleConversationTurn(request(body), context, id, async () => Response.json(answer))).json();
       const second = await (await handleConversationTurn(request(body), context, id, async () => assert.fail("Replay must not regenerate"))).json();
       assert.deepEqual(second, first); assert.equal(counts().completions, 1);
+    });
+    await t.test("general answer provenance survives reload and cannot replay as a document answer", async () => {
+      const { context } = fixture();
+      const body = { message: "What is photosynthesis?", requestId: randomUUID(), chatMode: "general" };
+      const general = { ...answer, content: "Plants convert light into chemical energy.", sources: [], rag: { ...answer.rag, status: "general", chatMode: "general", retrievedChunkCount: 0, contextChunkCount: 0, contextBytes: 0 } };
+      const response = await handleConversationTurn(request(body), context, id, async req => {
+        assert.equal((await req.json()).chatMode, "general");
+        return Response.json(general);
+      });
+      assert.equal(response.status, 200);
+      const saved = await response.json();
+      assert.deepEqual(saved.assistantMessage.sources, []);
+      assert.equal(saved.assistantMessage.rag.status, "general");
+      const restored = await (await handleConversation(request({}, "GET"), context, id)).json();
+      assert.equal(restored.messages[1].rag.chatMode, "general");
+      assert.equal((await handleConversationTurn(request({ ...body, chatMode: "documents" }), context, id, async () => assert.fail("Must not regenerate"))).status, 409);
     });
     await t.test("failed local generation keeps one failed question and no assistant; retry uses the same request ID", async () => {
       const { context, rows } = fixture(); const body = { message: "React?", requestId: randomUUID() };

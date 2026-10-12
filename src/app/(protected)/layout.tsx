@@ -12,6 +12,6 @@ export default async function ProtectedLayout({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   return (
-    <AppShell userEmail={user.email ?? "Signed-in user"}>{children}</AppShell>
+    <AppShell userEmail={user.email ?? "Signed-in user"} emailVerified={Boolean(user.email_confirmed_at)}>{children}</AppShell>
   );
 }

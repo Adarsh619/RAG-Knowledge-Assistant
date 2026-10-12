@@ -15,6 +15,10 @@ A private PDF knowledge assistant built with Next.js, Supabase and local AI. Upl
 - Grounded local Ollama answers, with an insufficient-evidence response before generation when retrieval is empty.
 - Expandable sources derived from the actual context passages, including filenames, physical PDF pages and excerpts.
 - Saved conversations and original citation snapshots; retries and duplicate-request protection.
+- Responsive workspace with collapsible navigation, contextual details, account settings, and locally persisted Light/Dark/System themes.
+- Explicit Documents, General AI and Auto chat modes. General answers use only the local model, are clearly labelled, and never receive document citations; Documents mode abstains when evidence is insufficient.
+- Document cards with an Upload → Process for AI → Ready workflow and direct document-scoped chat links.
+- Dashboard summaries from your actual library and conversation history, plus a local model availability check.
 - Mock mode for inexpensive interface development, plus optional extraction/chunk/retrieval inspectors for learning.
 
 ## Technology stack
@@ -72,6 +76,10 @@ These production screenshots use synthetic learning content and exclude personal
 <img src="docs/screenshots/mobile-chat.png" alt="Mobile grounded answer with expanded source evidence" width="375" />
 
 See [screenshot guidance](docs/screenshots/README.md) before adding more captures.
+
+See [the workspace UI guide](docs/ui-ux.md) for navigation, themes, document actions and validation notes.
+
+See [the final UI refinement report](docs/final-ui-ux.md) for the polished shell, Account/Settings pages, interaction changes and final validation results.
 
 ## Local setup
 

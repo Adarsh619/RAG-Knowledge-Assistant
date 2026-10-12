@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/page-header";
 import { ChatWorkspace } from "@/components/chat/chat-workspace";
-import { Icon } from "@/components/ui/icon";
 import { getLlmMode, getLlmProvider } from "@/lib/ai/provider";
 
 export const metadata: Metadata = { title: "Chat" };
@@ -12,25 +10,11 @@ export default function ChatPage() {
   const mode = getLlmMode();
   return (
     <>
-      <PageHeader
-        eyebrow="ASK. EXPLORE. UNDERSTAND."
-        title="Chat with your knowledge."
-        description={mode === "local"
-          ? "Ask your local model about your documents, then reload and resume your saved conversations."
-          : "Demo replies help you explore the interface. Document answers require local AI mode."}
-      />
+      <div className="chat-intro"><h1>Chat</h1><p>{mode === "local" ? "Your documents. Your local AI. A clearer answer." : "Explore the interface with safe demo replies."}</p></div>
       <ChatWorkspace
         configuredMode={mode}
         providerEnabled={mode ? getLlmProvider().enabled : false}
       />
-      <div className="mt-5 flex items-start gap-3 rounded-xl border border-dashed border-slate-200 p-4 text-xs leading-5 text-slate-500">
-        <Icon name="file" className="shrink-0 text-slate-400" />
-        <p>
-          Questions, answers and original source evidence are saved to your account. Expand Sources to inspect the passages used for that answer. {mode === "local"
-            ? "Local mode uses your owned passages and sends no context to hosted AI services."
-            : "Mock mode does not access documents or run a model. Follow the local setup guide to enable document answers."}
-        </p>
-      </div>
     </>
   );
 }

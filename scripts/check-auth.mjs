@@ -152,7 +152,7 @@ test("Supabase session and route checks using an offline Auth fixture", async (t
     });
 
     await t.test("signed-out protected pages redirect to login", async () => {
-      for (const path of ["/", "/chat", "/documents"]) {
+      for (const path of ["/", "/chat", "/documents", "/account", "/settings"]) {
         const response = await updateSession(pageRequest(path));
         assert.equal(response.status, 307);
         const location = new URL(response.headers.get("Location"));

@@ -1,6 +1,7 @@
 import type { RagSource, RagSummary } from "./rag.ts";
 
 export type LlmMode = "mock" | "local" | "openai";
+export type ChatMode = "documents" | "general" | "auto";
 
 export const MAX_MESSAGE_LENGTH = 4000;
 
@@ -15,6 +16,7 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   message: string;
+  chatMode?: ChatMode;
   documentId?: string | null;
 }
 

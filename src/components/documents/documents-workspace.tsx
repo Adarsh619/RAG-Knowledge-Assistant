@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Icon } from "@/components/ui/icon";
+import Link from "next/link";
+import { Modal } from "@/components/ui/modal";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { ShellSlot, useShell } from "@/components/shell-context";
+import { documentChatHref } from "@/lib/ui/preferences";
 import { ExtractionPreview } from "./extraction-preview";
 import { ChunkPreview } from "./chunk-preview";
 import { RetrievalInspector } from "./retrieval-inspector";
@@ -21,6 +26,10 @@ import type {
 } from "@/types/document";
 
 export function DocumentsWorkspace() {
+  const { openContext } = useShell();
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const preview = useRef<HTMLDivElement>(null);
+  const [previewKind, setPreviewKind] = useState<"text" | "chunks">("text");
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loadingList, setLoadingList] = useState(true);
@@ -43,6 +52,7 @@ export function DocumentsWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const listRequest = useRef<AbortController | null>(null);
   const mutating = useRef(false);
   const busy =
@@ -51,6 +61,14 @@ export function DocumentsWorkspace() {
     extractingId !== null ||
     embeddingId !== null ||
     ingestingId !== null;
+
+  useEffect(() => {
+    if (!extraction) return;
+    const heading = preview.current?.querySelector<HTMLElement>(previewKind === "chunks" ? "#chunk-heading" : "#extraction-heading");
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus({ preventScroll: true });
+    heading?.scrollIntoView({ block: "start" });
+  }, [extraction, previewKind]);
 
   const loadDocuments = useCallback(async (offset = 0) => {
     listRequest.current?.abort();
@@ -101,13 +119,15 @@ export function DocumentsWorkspace() {
     };
   }, [loadDocuments]);
 
-  function selectFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
+  function chooseFile(file: File | null) {
     const validationError = file ? validatePdfSelection(file) : null;
     setSelectedFile(validationError ? null : file);
     setError(validationError);
     setSuccess(null);
-    if (validationError) event.target.value = "";
+    if (fileInput.current) fileInput.current.value = "";
+  }
+  function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    chooseFile(event.target.files?.[0] ?? null);
   }
 
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
@@ -262,8 +282,8 @@ export function DocumentsWorkspace() {
         cache: "no-store",
         signal: controller.signal,
       });
-      const body = await readApiResponse<DocumentMutationResponse>(response);
-      if (!controller.signal.aborted) setSuccess(body.message);
+      await readApiResponse<DocumentMutationResponse>(response);
+      if (!controller.signal.aborted) setSuccess(`${document.name} is ready for AI.`);
     } catch (cause) {
       if (!controller.signal.aborted) {
         setFailedIngestionId(document.id);
@@ -282,357 +302,69 @@ export function DocumentsWorkspace() {
     }
   }
 
-  return (
-    <>
-      <section
-        id="pdf-upload"
-        aria-labelledby="upload-heading"
-        className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-6 sm:p-8"
-      >
-        <div className="flex items-start gap-4">
-          <span className="rounded-xl bg-emerald-50 p-3 text-emerald-800">
-            <Icon name="upload" width="26" height="26" />
-          </span>
-          <div>
-            <h2 id="upload-heading" className="text-lg font-semibold">
-              Add a PDF to your library
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Private storage for your documents. PDF files only, up to{" "}
-              {MAX_PDF_SIZE_LABEL} each.
-            </p>
-          </div>
-        </div>
-        <form onSubmit={uploadDocument} className="mt-6">
-          <label htmlFor="pdf-file" className="mb-2 block text-sm font-medium">
-            Select a PDF
-          </label>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              ref={fileInput}
-              id="pdf-file"
-              name="file"
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={selectFile}
-              disabled={busy}
-              aria-describedby="upload-hint"
-              className="min-w-0 flex-1 rounded-xl border border-slate-200 p-2 text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:font-medium file:text-slate-700 disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={!selectedFile || busy || loadingList}
-              className="primary-link shrink-0 disabled:opacity-60"
-            >
-              <Icon name="upload" />
-              {uploading ? "Uploading…" : "Upload PDF"}
-            </button>
-          </div>
-          <p id="upload-hint" className="mt-3 text-xs leading-5 text-slate-400">
-            Only you can access files in your library. Safe filenames are
-            generated when uploading.
-          </p>
-          {selectedFile && (
-            <p className="mt-3 break-words text-xs text-slate-500">
-              Selected: {selectedFile.name} ·{" "}
-              {formatFileSize(selectedFile.size)}
-            </p>
-          )}
-        </form>
-      </section>
-      {uploading && (
-        <p role="status" className="mt-4 text-sm text-emerald-800">
-          Uploading your PDF to private storage…
-        </p>
-      )}
-      {extractingId && (
-        <p role="status" className="mt-4 text-sm text-emerald-800">
-          Reading your private PDF, extracting text, and creating chunks
-          locally…
-        </p>
-      )}
-      {ingestingId && (
-        <p role="status" className="mt-4 text-sm text-emerald-800">
-          Processing your private PDF: extraction → chunking → local embeddings
-          → PostgreSQL. The first model load may take a moment.
-        </p>
-      )}
-      {error && (
-        <p
-          role="alert"
-          className="mt-4 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-700"
-        >
-          {error}
-        </p>
-      )}
-      {success && (
-        <p
-          role="status"
-          className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-800"
-        >
-          {success}
-        </p>
-      )}
-      <section
-        className="panel mt-7 overflow-hidden"
-        aria-labelledby="documents-heading"
-        aria-busy={loadingList}
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-5">
-          <h2 id="documents-heading" className="font-semibold">
-            Your documents{" "}
-            <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-normal text-slate-500">
-              {documents.length}
-              {nextOffset !== null ? "+" : ""}
-            </span>
-          </h2>
-          <button
-            type="button"
-            disabled={busy || loadingList}
-            onClick={() => void loadDocuments()}
-            className="text-xs font-semibold text-emerald-800 disabled:opacity-50"
-          >
-            Refresh list
-          </button>
-        </div>
-        {listError && (
-          <div className="border-b border-slate-100 px-6 py-4">
-            <p role="alert" className="text-sm leading-6 text-red-700">
-              {listError}
-            </p>
-            <button
-              type="button"
-              onClick={() => void loadDocuments()}
-              disabled={loadingList || busy}
-              className="mt-2 text-sm font-semibold text-emerald-800"
-            >
-              Retry loading
-            </button>
-          </div>
-        )}
-        {loadingList && (
-          <p role="status" className="px-6 py-6 text-sm text-slate-500">
-            Loading your private documents…
-          </p>
-        )}
-        {!loadingList && !listError && documents.length === 0 && (
-          <div className="flex flex-col items-center px-6 py-12 text-center">
-            <Icon
-              name="file"
-              width="34"
-              height="34"
-              className="mb-4 text-slate-300"
-            />
-            <h3 className="text-sm font-semibold">No documents yet</h3>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
-              Upload your first PDF using the form above.
-            </p>
-          </div>
-        )}
-        {documents.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="document-table w-full text-left text-sm" role="table" aria-label="Private PDF library">
-              <caption className="sr-only">Your PDFs, processing state and document actions</caption>
-              <thead className="bg-slate-50 text-xs text-slate-500">
-                <tr>
-                  <th className="px-6 py-3 font-medium">File name</th>
-                  <th className="px-4 py-3 font-medium">Size</th>
-                  <th className="px-4 py-3 font-medium">Uploaded</th>
-                  <th className="px-4 py-3 font-medium">Ingestion</th>
-                  <th className="px-6 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {documents.map((document) => (
-                  <tr key={document.id}>
-                    <td data-label="File" className="max-w-72 px-6 py-5">
-                      <div className="flex items-center gap-3">
-                        <Icon
-                          name="file"
-                          className="shrink-0 text-emerald-700"
-                        />
-                        <span className="min-w-0 font-medium wrap-anywhere">
-                          {document.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td data-label="Size" className="whitespace-nowrap px-4 py-5 text-slate-500">
-                      {formatFileSize(document.size)}
-                    </td>
-                    <td data-label="Uploaded" className="whitespace-nowrap px-4 py-5 text-xs text-slate-500">
-                      {document.uploadedAt
-                        ? new Date(document.uploadedAt).toLocaleString()
-                        : "Date unavailable"}
-                    </td>
-                    <td data-label="Status" className="min-w-56 px-4 py-5 text-xs leading-5 text-slate-500">
-                      <p className="font-semibold text-slate-700">
-                        {ingestingId === document.id
-                          ? "Processing…"
-                          : document.ingestion?.status === "ready"
-                            ? "Ready"
-                            : document.ingestion?.status === "deleting"
-                              ? "Deletion pending"
-                              : failedIngestionId === document.id
-                                ? "Failed — retry ingestion"
-                                : "Not processed"}
-                      </p>
-                      {document.ingestion?.status === "ready" && (
-                        <>
-                          <p>
-                            {document.ingestion.chunkCount} chunks ·{" "}
-                            {document.ingestion.embeddingDimension} dimensions
-                          </p>
-                          <p>{document.ingestion.embeddingModel}</p>
-                          <p>
-                            Processed:{" "}
-                            {document.ingestion.processedAt
-                              ? new Date(
-                                  document.ingestion.processedAt,
-                                ).toLocaleString()
-                              : "Unavailable"}
-                          </p>
-                          {failedIngestionId === document.id && (
-                            <p className="text-red-700">
-                              Last attempt failed; previous result retained.
-                            </p>
-                          )}
-                        </>
-                      )}
-                      {document.storageMissing && (
-                        <p>
-                          PDF removed; retry deletion to finish database
-                          cleanup.
-                        </p>
-                      )}
-                    </td>
-                    <td data-label="Actions" className="px-6 py-5">
-                      {confirmDeleteId === document.id ? (
-                        <div className="flex min-w-36 flex-wrap gap-3">
-                          <p className="w-full text-xs text-slate-500">
-                            Permanently delete this PDF and its indexed content? Saved chat excerpts are kept until those conversations are deleted.
-                          </p>
-                          <button
-                            type="button"
-                            disabled={busy || loadingList}
-                            onClick={() => void deleteDocument(document.id)}
-                            className="text-xs font-semibold text-red-700 disabled:opacity-50"
-                          >
-                            {deletingId === document.id
-                              ? "Deleting…"
-                              : "Confirm delete"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setConfirmDeleteId(null)}
-                            className="text-xs text-slate-500"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex min-w-40 flex-wrap gap-4">
-                          <button
-                            type="button"
-                            disabled={
-                              busy ||
-                              loadingList ||
-                              document.ingestion?.status === "deleting"
-                            }
-                            onClick={() => void ingestDocument(document)}
-                            aria-label={`${document.ingestion?.status === "ready" ? "Re-ingest" : "Ingest"} ${document.name}`}
-                            className="text-xs font-semibold text-emerald-800 disabled:opacity-50"
-                          >
-                            {ingestingId === document.id
-                              ? "Processing…"
-                              : document.ingestion?.status === "ready"
-                                ? "Re-ingest"
-                                : "Ingest"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={
-                              busy ||
-                              loadingList ||
-                              document.ingestion?.status === "deleting"
-                            }
-                            onClick={() => void extractDocument(document.id)}
-                            aria-label={`Extract text from ${document.name}`}
-                            className="text-xs font-semibold text-emerald-800 disabled:opacity-50"
-                          >
-                            {extractingId === document.id
-                              ? "Extracting…"
-                              : "Extract text"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy || loadingList}
-                            onClick={() => setConfirmDeleteId(document.id)}
-                            aria-label={`Delete ${document.name}`}
-                            className="text-xs font-semibold text-red-700 disabled:opacity-50"
-                          >
-                            {document.ingestion?.status === "deleting"
-                              ? "Retry deletion"
-                              : "Delete"}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {nextOffset !== null && (
-          <div className="border-t border-slate-100 px-6 py-4">
-            <button
-              type="button"
-              disabled={busy || loadingList}
-              onClick={() => void loadDocuments(nextOffset)}
-              className="text-sm font-semibold text-emerald-800 disabled:opacity-50"
-            >
-              Load more documents
-            </button>
-          </div>
-        )}
-      </section>
-      <details className="panel mt-6 p-5">
-        <summary className="text-sm font-semibold text-emerald-800">Explore search evidence</summary>
-        <p className="mt-2 text-xs leading-5 text-slate-500">Optional learning tools for inspecting the passages found before answer generation.</p>
-      <RetrievalInspector
-        key={documents.map((document) => `${document.id}:${document.ingestion?.status}:${document.ingestion?.processedAt}`).join("|")}
-        documents={documents}
-        disabled={busy || loadingList}
-      />
-      </details>
+  const selectedDocument = documents.find(document => document.id === selectedDocumentId);
+  const deletingDocument = documents.find(document => document.id === confirmDeleteId);
+  function showDetails(document: StoredDocument) { setSelectedDocumentId(document.id); openContext(); }
+  function status(document: StoredDocument) {
+    if (ingestingId === document.id) return "Processing…";
+    if (document.ingestion?.status === "deleting") return "Deletion pending";
+    if (document.ingestion?.status === "ready") return "Ready for AI";
+    return failedIngestionId === document.id ? "Failed — try again" : "Uploaded";
+  }
+  const date = (value: string | null | undefined) => value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Not available";
+  const countLabel = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
-      {extraction && (
-        <>
-          <ExtractionPreview
-            result={extraction}
-            onClose={() => {
-              embeddingRequest.current?.abort();
-              setExtraction(null);
-              setEmbedding(null);
-              setEmbeddingId(null);
-            }}
-          />
-          <ChunkPreview
-            result={extraction}
-            embedding={embedding}
-            onEmbed={() => void generateEmbeddings()}
-            embeddingBusy={embeddingId !== null}
-            disabled={busy || loadingList}
-          />
-        </>
-      )}
-      <p className="mt-6 text-xs leading-5 text-slate-400">
-        PDFs are stored privately. Ingest saves document metadata, chunks and
-        local embeddings in PostgreSQL. Extract text opens a temporary preview.
-        Re-ingest replaces stored chunks atomically. Use the retrieval inspector
-        to examine matching passages. Open Chat for local document answers with expandable sources.
-      </p>
-    </>
-  );
+  return <>
+    <section id="pdf-upload" aria-labelledby="upload-heading" className="upload-panel">
+      <p className="workflow-label">01 UPLOAD PDF &nbsp; → &nbsp; 02 PROCESS FOR AI &nbsp; → &nbsp; 03 ASK QUESTIONS</p>
+      <div className="flex items-start gap-4"><span className="rounded-xl bg-emerald-50 p-3 text-emerald-800"><Icon name="upload" width="24" height="24" /></span><div><h2 id="upload-heading" className="text-lg font-semibold">Give your knowledge a home.</h2><p className="mt-1 text-sm leading-6 text-slate-500">Add a PDF, then process it to make it ready for questions.</p></div></div>
+      <form onSubmit={uploadDocument} className="mt-5">
+        <label htmlFor="pdf-file" className="sr-only">Select a PDF</label>
+        <input ref={fileInput} id="pdf-file" name="file" type="file" accept=".pdf,application/pdf" onChange={selectFile} disabled={busy} aria-describedby="upload-hint" className="sr-only" tabIndex={-1} />
+        <div className={`pdf-dropzone ${dragging ? "drag-active" : ""}`} onDragOver={event => { event.preventDefault(); if (!busy) setDragging(true); }} onDragLeave={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }} onDrop={event => {
+          event.preventDefault(); setDragging(false); if (busy) return;
+          if (event.dataTransfer.files.length !== 1) { setSelectedFile(null); setError("Choose one PDF at a time."); return; }
+          chooseFile(event.dataTransfer.files[0]);
+        }}><Icon name="upload" /><p>{dragging ? "Drop your PDF here" : selectedFile ? selectedFile.name : "Drag a PDF here, or choose a file"}</p><button type="button" className="secondary-link choose-pdf" disabled={busy} onClick={() => fileInput.current?.click()}>Choose PDF</button></div>
+        <div className="upload-submit"><p id="upload-hint">PDF only · Up to {MAX_PDF_SIZE_LABEL} · Private to your account</p><button type="submit" disabled={!selectedFile || busy || loadingList} className="primary-link"><Icon name="upload" />{uploading ? "Uploading…" : "Upload PDF"}</button></div>
+        {selectedFile && <p className="mt-2 text-xs text-slate-500 wrap-anywhere">Selected: {selectedFile.name} · {formatFileSize(selectedFile.size)}</p>}
+      </form>
+    </section>
+    {(uploading || extractingId || ingestingId) && <p role="status" className="mt-4 text-sm text-emerald-800">{uploading ? "Uploading your private PDF…" : extractingId ? "Preparing your text and chunk previews…" : "Processing for AI. Reading, organizing and indexing your PDF locally. This can take a moment."}</p>}
+    {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-700">{error}</p>}
+    {success && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">{success}</p>}
+    <section aria-labelledby="documents-heading" aria-busy={loadingList}>
+      <div className="library-toolbar"><h2 id="documents-heading">Your library <span>{documents.length}{nextOffset !== null ? "+" : ""} documents</span></h2><button disabled={busy || loadingList} onClick={() => void loadDocuments()} className="text-button">Refresh</button></div>
+      {listError && <div className="mb-4"><p role="alert" className="text-sm text-red-700">{listError}</p><button disabled={loadingList || busy} onClick={() => void loadDocuments()} className="text-button mt-2">Retry loading</button></div>}
+      {loadingList && <p role="status" className="mb-4 text-sm text-slate-500">Loading your library…</p>}
+      {!loadingList && !listError && !documents.length && <div className="empty-state"><Icon name="file" width="32" height="32" /><h3>No documents yet.</h3><p>Upload a PDF to create your private knowledge base.</p><button className="text-button mt-4" onClick={() => fileInput.current?.click()}>Upload document</button></div>}
+      <div className="document-grid">{documents.map(document => <article key={document.id} data-document-id={document.id} className={`document-card ${selectedDocumentId === document.id ? "selected" : ""}`} aria-busy={ingestingId === document.id}>
+        <div className="document-card-top"><span className="file-symbol"><Icon name="file" /></span><ActionMenu label={`Actions for ${document.name}`}>
+          <button onClick={() => showDetails(document)}>View details</button>
+          <button onClick={() => showDetails(document)}>View indexing information</button>
+          <button disabled={busy || loadingList || document.ingestion?.status === "deleting"} onClick={() => { setPreviewKind("text"); void extractDocument(document.id); }}>Preview extracted text</button>
+          <button disabled={busy || loadingList || document.ingestion?.status === "deleting"} onClick={() => { setPreviewKind("chunks"); void extractDocument(document.id); }}>Inspect chunks</button>
+          {document.ingestion?.status === "ready" && <button disabled={busy || loadingList} onClick={() => void ingestDocument(document)}>Re-process document</button>}
+          <button disabled={busy || loadingList} onClick={() => setConfirmDeleteId(document.id)} className="text-red-700">{document.ingestion?.status === "deleting" ? "Retry deletion" : "Delete document"}</button>
+        </ActionMenu></div>
+        <h3><button onClick={() => showDetails(document)}>{document.name}</button></h3>
+        <span className={`status-chip ${document.ingestion?.status === "ready" && ingestingId !== document.id ? "ready" : ""}`}>{document.ingestion?.status === "ready" && <Icon name="check" width="12" height="12" />}{status(document)}</span>
+        <p className="document-meta">{document.ingestion?.pageCount != null && `${countLabel(document.ingestion.pageCount, "page")} · `}{document.ingestion?.status === "ready" && `${countLabel(document.ingestion.chunkCount, "chunk")} · `}{formatFileSize(document.size)}</p>
+        <p className="document-date">{document.ingestion?.processedAt ? `Processed ${date(document.ingestion.processedAt)}` : `Uploaded ${date(document.uploadedAt)}`}</p>
+        {failedIngestionId === document.id && document.ingestion?.status === "ready" && <p className="mt-3 text-xs text-red-700">Re-processing failed. Your previous index is still available.</p>}
+        {document.storageMissing && <p className="mt-3 text-xs text-red-700">PDF removed. Retry deletion to finish cleanup.</p>}
+        {document.ingestion?.status === "ready" ? <Link className="document-primary" href={documentChatHref(document.ingestion.id)}>Ask about this document <Icon name="arrow" width="16" height="16" /></Link> : <button className="document-primary w-full" disabled={busy || loadingList || document.ingestion?.status === "deleting"} onClick={() => void ingestDocument(document)}>{ingestingId === document.id ? "Processing…" : "Process for AI"}<Icon name="spark" width="16" height="16" /></button>}
+      </article>)}</div>
+      {nextOffset !== null && <button disabled={busy || loadingList} onClick={() => void loadDocuments(nextOffset)} className="text-button mt-5">Load more documents</button>}
+    </section>
+    <details className="panel mt-6 p-5"><summary className="text-sm font-semibold text-emerald-800">Advanced · Explore search evidence</summary><p className="mt-2 text-xs leading-5 text-slate-500">Inspect matching passages before answer generation. Document previews and re-processing are in each card’s actions menu.</p><RetrievalInspector key={documents.map(document => `${document.id}:${document.ingestion?.status}:${document.ingestion?.processedAt}`).join("|")} documents={documents} disabled={busy || loadingList} /></details>
+    {extraction && <div ref={preview} id="document-preview"><ExtractionPreview result={extraction} onClose={() => { embeddingRequest.current?.abort(); setExtraction(null); setEmbedding(null); setEmbeddingId(null); }} /><ChunkPreview result={extraction} embedding={embedding} onEmbed={() => void generateEmbeddings()} embeddingBusy={embeddingId !== null} disabled={busy || loadingList} /></div>}
+    <ShellSlot region="context">{selectedDocument ? <><h2>{selectedDocument.name}</h2><span className={`status-chip ${selectedDocument.ingestion?.status === "ready" ? "ready" : ""}`}>{status(selectedDocument)}</span><dl className="detail-list">
+      {([["File size", formatFileSize(selectedDocument.size)], ["Uploaded", date(selectedDocument.uploadedAt)], ["Pages", selectedDocument.ingestion?.pageCount ?? "Available after processing"], ["Chunks", selectedDocument.ingestion?.chunkCount ?? "Not processed"], ["Processed", date(selectedDocument.ingestion?.processedAt)]] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+    </dl><details><summary>Processing details</summary><ul className="processing-checklist"><li><Icon name="check" />PDF uploaded</li>{selectedDocument.ingestion?.status === "ready" && <><li><Icon name="check" />Text extracted</li><li><Icon name="check" />{selectedDocument.ingestion.pageCount} pages detected</li><li><Icon name="check" />{selectedDocument.ingestion.chunkCount} chunks created</li><li><Icon name="check" />Local embeddings generated</li><li><Icon name="check" />Added to semantic index</li></>}</ul><p>Model: {selectedDocument.ingestion?.embeddingModel ?? "Available after processing"}<br />Dimensions: {selectedDocument.ingestion?.embeddingDimension ?? "—"}</p></details><div className="context-actions">
+      {selectedDocument.ingestion?.status === "ready" && <Link className="primary-link" href={documentChatHref(selectedDocument.ingestion.id)}>Ask about this document</Link>}
+      <button className="secondary-link" disabled={busy || loadingList || selectedDocument.ingestion?.status === "deleting"} onClick={() => void ingestDocument(selectedDocument)}>{selectedDocument.ingestion?.status === "ready" ? "Re-process document" : "Process for AI"}</button>
+    </div><p>Only your account can access this file and its indexed content.</p></> : <><h2>Document details</h2><p>Select a document’s filename or choose View details to inspect its processing status and metadata.</p><p>Process for AI makes an uploaded PDF ready for questions. You can still explore text, chunks and embeddings in advanced actions.</p></>}</ShellSlot>
+    {deletingDocument && <Modal title="Delete document?" onClose={() => { if (!busy) setConfirmDeleteId(null); }}><p className="font-semibold wrap-anywhere">{deletingDocument.name}</p><p className="muted mt-3">This permanently deletes the PDF and its search index. Saved chat excerpts remain until their conversations are deleted.</p><div className="mt-6 flex flex-wrap justify-end gap-3"><button disabled={busy} className="secondary-link" onClick={() => setConfirmDeleteId(null)}>Cancel</button><button disabled={busy || loadingList} className="primary-link" onClick={() => void deleteDocument(deletingDocument.id)}>{deletingId ? "Deleting…" : "Confirm delete"}</button></div>{error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}</Modal>}
+  </>;
 }
