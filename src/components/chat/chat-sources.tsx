@@ -1,15 +1,16 @@
 import type { RagSource } from "@/types/rag";
 import { formatSourcePages, groupRagSources } from "@/lib/rag/source-presentation";
+import { Icon } from "@/components/ui/icon";
 
 export function ChatSources({ sources }: { sources: RagSource[] }) {
   if (!sources.length) return null;
   const groups = groupRagSources(sources);
   return (
     <section aria-label="Answer sources" className="mt-4 border-t border-slate-200 pt-3">
-      <h3 className="text-xs font-semibold text-emerald-800">Sources</h3>
+      <h3 className="flex items-center gap-2 text-xs font-semibold text-emerald-800"><Icon name="book" width="15" height="15" />Sources</h3>
       <p className="mt-1 text-xs leading-5 text-slate-500">
-        Context supplied to the model. These passages may not answer every part of your question;
-        inspect the evidence to check the answer. Similarity is relevance, not certainty.
+        Passages used to prepare this answer. Expand to check the evidence.
+        Similarity measures relevance, not certainty.
       </p>
       <ol className="mt-2 space-y-2">
         {groups.map((group, index) => (

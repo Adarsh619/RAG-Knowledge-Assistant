@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Icon } from "@/components/ui/icon";
+import Link from "next/link";
+import { ShellSlot, AiBadge, useShell } from "@/components/shell-context";
+import { parseDocumentScope, parseChatMode, CHAT_MODE_KEY } from "@/lib/ui/preferences";
+import type { ChatMode } from "@/types/chat";
 import { ChatSources } from "./chat-sources";
 import { readApiResponse } from "@/lib/http/client-response";
 import { ConversationHistory } from "./conversation-history";
@@ -24,6 +28,7 @@ export function ChatWorkspace({
   providerEnabled: boolean;
 }) {
   const router = useRouter();
+  const { openContext, closeNavigation } = useShell();
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
@@ -37,16 +42,30 @@ export function ChatWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
-  const isMock = configuredMode === "mock";
   const isLocal = configuredMode === "local";
   const messageLimit = isLocal ? RAG_LIMITS.maxQuestionCharacters : MAX_MESSAGE_LENGTH;
   const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [documentId, setDocumentId] = useState("");
+  const [chatMode, setChatMode] = useState<ChatMode>("documents");
+  const modeDescriptions = { documents: "Answers only from your uploaded documents.", general: "Answers using your local AI model.", auto: "Uses your documents when relevant, otherwise local AI." };
   const [listOffset, setListOffset] = useState(0);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const chatRequest = useRef<AbortController | null>(null);
+  const composerInput = useRef<HTMLTextAreaElement>(null);
+  const focusAfterNew = useRef(false);
+  const messageLog = useRef<HTMLDivElement>(null);
+  const newestMessageId = messages.at(-1)?.id;
+  useEffect(() => {
+    const log = messageLog.current;
+    if (log) log.scrollTop = log.scrollHeight;
+  }, [newestMessageId, loading]);
+  useEffect(() => {
+    if (focusAfterNew.current && !historyBusy && !loading) {
+      focusAfterNew.current = false; composerInput.current?.focus();
+    }
+  }, [active?.id, historyBusy, loading]);
 
   async function api<T>(url: string, options?: RequestInit): Promise<T> {
     const response = await fetch(url, { cache: "no-store", ...options });
@@ -55,6 +74,8 @@ export function ChatWorkspace({
   function select(data: ConversationDetailResponse) {
     setActive(data.conversation); setMessages(data.messages); setMessageNext(data.nextOffset);
     setDocumentId(data.conversation.documentId ?? ""); setDraft("");
+    const lastAnswer = [...data.messages].reverse().find(message => message.role === "assistant");
+    if (lastAnswer) setChatMode(parseChatMode(lastAnswer.rag?.chatMode));
     router.replace(`/chat?conversation=${data.conversation.id}`, { scroll: false });
   }
   async function refreshHistory(offset = 0) {
@@ -71,9 +92,9 @@ export function ChatWorkspace({
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load saved history."); }
     finally { historyOperation.current = false; setHistoryBusy(false); }
   }
-  async function newConversation() {
+  async function newConversation(scope: string | null = null) {
     const data = await api<{ conversation: Conversation }>("/api/conversations", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ documentId: scope }),
     });
     select({ conversation: data.conversation, messages: [], nextOffset: null });
     await refreshHistory();
@@ -92,15 +113,23 @@ export function ChatWorkspace({
     const controller = new AbortController();
     async function load() {
       try {
+        let preference: ChatMode = "documents";
+        try { preference = parseChatMode(localStorage.getItem(CHAT_MODE_KEY)); } catch {}
+        const parameters = new URL(window.location.href).searchParams;
+        const scopedDocument = parseDocumentScope(parameters.get("document"));
+        setChatMode(scopedDocument ? "documents" : preference);
         const list = await api<ConversationListResponse>("/api/conversations", { signal: controller.signal });
         if (controller.signal.aborted) return;
         setConversations(list.conversations); setHistoryNext(list.nextOffset);
         const id = new URL(window.location.href).searchParams.get("conversation");
+        if (!id) setDocumentId(parseDocumentScope(new URL(window.location.href).searchParams.get("document")));
         if (id) {
           const detail = await api<ConversationDetailResponse>(`/api/conversations/${encodeURIComponent(id)}`, { signal: controller.signal });
           if (!controller.signal.aborted) {
             setActive(detail.conversation); setMessages(detail.messages); setMessageNext(detail.nextOffset);
             setDocumentId(detail.conversation.documentId ?? "");
+            const lastAnswer = [...detail.messages].reverse().find(message => message.role === "assistant");
+            if (lastAnswer) setChatMode(parseChatMode(lastAnswer.rag?.chatMode));
           }
         }
       } catch (cause) {
@@ -156,21 +185,24 @@ export function ChatWorkspace({
     await submitTurn(message, crypto.randomUUID(), isLocal ? documentId || null : null);
   }
 
-  async function submitTurn(message: string, requestId: string, scope: string | null) {
+  async function submitTurn(message: string, requestId: string, scope: string | null, requestedMode: ChatMode = chatMode) {
     if (sending.current || historyOperation.current) return;
     sending.current = true; setLoading(true); setError(null);
     setPendingText(message); setDraft("");
+    // Remember the original mode for an interrupted turn in this browser. Cross-browser
+    // retries without that preference safely default to Documents rather than silently falling back.
+    try { localStorage.setItem(`groundwork.turn-mode.${requestId}`, requestedMode); } catch {}
     let conversationId = active?.id;
 
     try {
-      if (!conversationId) conversationId = (await newConversation()).id;
+      if (!conversationId) conversationId = (await newConversation(scope)).id;
       const controller = new AbortController();
       chatRequest.current = controller;
       const data = await api<ConversationTurnResponse>(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message, documentId: scope, requestId,
+          message, documentId: scope, requestId, chatMode: isLocal ? requestedMode : "documents",
         }),
         signal: AbortSignal.any([
           controller.signal, AbortSignal.timeout(isLocal ? 150000 : 15000),
@@ -216,37 +248,37 @@ export function ChatWorkspace({
     }
   }
 
+  function changeMode(value: string) {
+    const mode = parseChatMode(value); setChatMode(mode);
+    try { localStorage.setItem(CHAT_MODE_KEY, mode); } catch {}
+  }
+  function retryMode(requestId: string): ChatMode {
+    try { return parseChatMode(localStorage.getItem(`groundwork.turn-mode.${requestId}`)); } catch { return "documents"; }
+  }
+
   return (
-    <section aria-label="Chat workspace" className="panel overflow-hidden">
+    <section aria-label="Chat workspace" className="panel chat-panel overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
         <span className="flex min-w-0 items-center gap-2 text-sm font-semibold wrap-anywhere">
           <Icon name="chat" className="shrink-0 text-emerald-700" /> {active?.title ?? "Your knowledge chat"}
         </span>
-        <span
-          className={`rounded-full px-3 py-1 text-xs ${isMock ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}
-        >
-          {!providerEnabled
-            ? "Provider disabled · no external LLM calls"
-            : isMock
-              ? "Mock mode · no external LLM calls"
-              : "Local AI · private document answers"}
-        </span>
+        <AiBadge />
       </div>
 
-      <ConversationHistory conversations={conversations} selectedId={active?.id ?? null}
+      <ShellSlot region="history"><ConversationHistory conversations={conversations} selectedId={active?.id ?? null}
         busy={loading || historyBusy} nextOffset={historyNext}
-        onNew={() => void historyAction(async () => { await newConversation(); })}
-        onOpen={id => void historyAction(async () => { select(await api<ConversationDetailResponse>(`/api/conversations/${id}`)); })}
+        onNew={() => { closeNavigation(); focusAfterNew.current = true; void historyAction(async () => { await newConversation(); }); }}
+        onOpen={id => { closeNavigation(); void historyAction(async () => { select(await api<ConversationDetailResponse>(`/api/conversations/${id}`)); }); }}
         onDelete={id => void historyAction(() => deleteConversation(id))}
         onMore={() => void historyAction(async () => { await refreshHistory(historyNext ?? 0); })} />
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-4 text-xs text-slate-500">
-        <span>{historyBusy ? "Loading saved history…" : "Questions, answers and original evidence are saved to your account."}</span>
-        <button type="button" disabled={loading || historyBusy} className="font-semibold text-emerald-800"
+        {historyBusy && <p role="status" className="mt-3 text-xs text-slate-500">Loading saved history…</p>}
+        <button type="button" disabled={loading || historyBusy} className="history-refresh"
           onClick={() => void historyAction(async () => {
             await refreshHistory();
             if (active) select(await api<ConversationDetailResponse>(`/api/conversations/${active.id}`));
           })}>Refresh history</button>
-      </div>
+      </ShellSlot>
+      <ShellSlot region="context"><h2>Conversation details</h2><AiBadge /><h3>Chat mode</h3><p>{modeDescriptions[chatMode]}</p><h3>Document scope</h3><p>{chatMode === "general" ? "Document retrieval is off. Your selected scope is kept for later." : documentId ? documents.find(document => document.ingestion?.id === documentId)?.name ?? "Selected document (not in loaded choices)" : "All my ready documents"}</p><p>Change mode and scope in the composer. Document searches use only your account’s files.</p><dl className="detail-list"><div><dt>Conversation</dt><dd>{active?.title ?? "New conversation"}</dd></div><div><dt>Saved messages loaded</dt><dd>{messages.length}{messageNext !== null ? "+" : ""}</dd></div>{active && <div><dt>Last activity</dt><dd>{new Date(active.updatedAt).toLocaleDateString()}</dd></div>}</dl><h3>Evidence, beside the answer</h3><p>Document answers include Sources beneath the answer. General AI answers use the local model’s knowledge and have no document citations.</p><p>Previous messages are saved for you, but are not sent to the model. Include the subject in each question.</p></ShellSlot>
       {messageNext !== null && <button type="button" disabled={loading || historyBusy}
         className="mx-6 mt-4 text-xs font-semibold text-emerald-800" onClick={() => void historyAction(async () => {
           if (!active) return;
@@ -269,21 +301,21 @@ export function ChatWorkspace({
       )}
 
       {messages.length === 0 ? (
-        <div className="flex min-h-80 flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="chat-empty flex flex-col items-center justify-center px-6 py-8 text-center">
           <span className="mb-5 rounded-2xl bg-emerald-50 p-4 text-emerald-800">
             <Icon name="spark" width="30" height="30" />
           </span>
           <h2 className="text-2xl font-semibold tracking-tight">
-            {isLocal ? "Ask your documents." : "Try a demo message."}
+            {isLocal ? chatMode === "documents" ? "Ask your documents." : chatMode === "general" ? "Ask your local AI." : "A question, a little clarity." : "Try a demo message."}
           </h2>
           <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">
             {isLocal
-              ? "Upload a PDF in Documents, choose Ingest, and wait for Ready. Then ask a question and check the sources beneath the answer."
+              ? modeDescriptions[chatMode]
               : "Send a message through the backend and receive a local development confirmation. These replies are generated by code, not an AI model."}
           </p>
           <div className="mt-8 grid w-full max-w-xl gap-3 sm:grid-cols-2">
             {(isLocal
-              ? ["What does my document say about React hooks?", "Summarize the main topic of my document."]
+              ? chatMode === "general" ? ["Explain photosynthesis simply.", "Help me plan a productive study session."] : ["What are the key points in this document?", "Which important dates or deadlines are mentioned?"]
               : ["Hello, backend!", "What happens when I send a message?"]).map(
               (text) => (
                 <button
@@ -301,11 +333,12 @@ export function ChatWorkspace({
         </div>
       ) : (
         <div
+          ref={messageLog}
           role="log"
           aria-label="Conversation messages"
           aria-live="polite"
           aria-relevant="additions"
-          className="min-h-80 space-y-5 px-5 py-6 md:px-6"
+          className="chat-message-log space-y-5 px-5 py-6 md:px-6"
         >
           {messages.map((message) => (
             <div
@@ -313,7 +346,7 @@ export function ChatWorkspace({
               className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`min-w-0 max-w-[95%] rounded-2xl px-4 py-3 sm:max-w-[85%] ${message.role === "user" ? "bg-emerald-800 text-white" : "border border-slate-200 bg-slate-50 text-slate-700"}`}
+                  className={`message-body ${message.role === "user" ? "user-message" : "assistant-message"}`}
               >
                 <p
                   className={`mb-2 text-[11px] font-semibold ${message.role === "user" ? "text-emerald-100" : "text-emerald-800"}`}
@@ -323,23 +356,23 @@ export function ChatWorkspace({
                     : message.mode === "mock"
                       ? "Assistant · local mock"
                       : message.rag?.status === "insufficient_context"
-                        ? "Documents · insufficient context · no generation"
-                        : "Assistant · local Ollama"}
+                        ? "Not enough document evidence"
+                        : message.rag?.status === "general" ? "General AI answer" : "Based on your documents"}
                 </p>
+                {message.role === "assistant" && message.rag?.status === "general" && <p className="answer-origin">Not based on your uploaded documents.</p>}
                 <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">
-                  {message.content}
+                  {message.rag?.status === "insufficient_context" ? "Your selected documents do not contain enough information to answer this question." : message.content}
                 </p>
+                {message.role === "assistant" && message.rag?.status === "insufficient_context" && <div className="answer-actions"><button type="button" className="secondary-link" disabled={loading || historyBusy || activePending} onClick={() => { changeMode("general"); composerInput.current?.focus(); }}>Try General AI</button><button type="button" className="text-button" disabled={loading || historyBusy || activePending} onClick={() => { changeMode("documents"); requestAnimationFrame(() => document.getElementById("chat-document")?.focus()); }}>Change document scope</button></div>}
                 {message.role === "user" && message.status !== "completed" && <div className="mt-3 text-xs text-emerald-100">
                   <p>{message.status === "failed" ? "Saved question · reply failed." : "Saved question · reply pending. Refresh to check its status."}</p>
                   {(message.status === "failed" || clock - Date.parse(message.startedAt) >= REPLY_LEASE_MS) &&
                     <button type="button" disabled={loading || historyBusy || activePending}
-                      onClick={() => void submitTurn(message.content, message.requestId, message.documentId)}
+                      onClick={() => void submitTurn(message.content, message.requestId, message.documentId, retryMode(message.requestId))}
                       className="mt-2 rounded border border-emerald-200 px-3 py-1 font-semibold disabled:opacity-50">Retry reply</button>}
                 </div>}
                 {message.rag?.status === "generated" && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Local model: {message.rag.model} · {message.rag.contextChunkCount} passages used
-                  </p>
+                  <p className="mt-2 text-xs text-slate-500">{message.rag.contextChunkCount} source {message.rag.contextChunkCount === 1 ? "passage" : "passages"} used</p>
                 )}
                 {message.role === "assistant" && message.rag?.status === "generated" && (
                   <ChatSources sources={message.sources ?? []} />
@@ -358,17 +391,18 @@ export function ChatWorkspace({
         {pendingText && <p className="my-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900 whitespace-pre-wrap wrap-anywhere">Sending: {pendingText}</p>}
         {activePending && !loading && <p className="pb-4">A saved reply is in progress. Refresh history; interrupted attempts can be retried after five minutes.</p>}
         {loading && <p className="pb-4">{isLocal
-          ? "Retrieving your passages and generating locally… CPU/model loading can take a moment."
+          ? chatMode === "general" ? "Your local AI is preparing an answer…" : "Checking your documents and preparing an answer locally…"
           : "Creating a local mock response…"}</p>}
       </div>
       <form
         onSubmit={sendMessage}
-        className="border-t border-slate-100 bg-slate-50/50 p-5"
+        className="chat-composer"
       >
+        {isLocal && chatMode === "documents" && !loadingDocuments && !documentError && !documents.length && <div className="no-ready-documents"><p>No ready documents available.</p><Link href="/documents#pdf-upload" className="text-button">Upload document</Link><button type="button" className="text-button" onClick={() => changeMode("general")}>Switch to General AI</button></div>}
         {isLocal && (
-          <div className="mb-4">
-            <label htmlFor="chat-document" className="mb-1 block text-xs font-medium text-slate-600">Document scope</label>
-            <select id="chat-document" value={documentId} disabled={loading || historyBusy || loadingDocuments}
+          <div className="chat-mode-controls"><div><label htmlFor="chat-mode" className="mb-2 block text-xs font-medium text-slate-600">Mode</label><select id="chat-mode" value={chatMode} disabled={loading || historyBusy || activePending} onChange={event => changeMode(event.target.value)} aria-describedby="chat-mode-description" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="auto">Auto</option><option value="documents">Documents</option><option value="general">General AI</option></select><p id="chat-mode-description" className="chat-mode-description">{modeDescriptions[chatMode]}</p></div><div>
+            <div className="mb-2 flex items-center justify-between gap-3"><label htmlFor="chat-document" className="text-xs font-medium text-slate-600">Document scope</label><button type="button" className="text-button" onClick={openContext}>View context</button></div>
+            <select id="chat-document" value={documentId} disabled={chatMode === "general" || loading || historyBusy || loadingDocuments || activePending}
               onChange={(event) => setDocumentId(event.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
               <option value="">All my ready documents</option>
@@ -380,17 +414,17 @@ export function ChatWorkspace({
                 <option key={document.ingestion!.id} value={document.ingestion!.id}>{document.name}</option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-slate-500">Only ingested, ready documents are searched. Each question is independent; earlier chat messages are not sent to the model.</p>
             {documentError && <p role="alert" className="mt-1 text-xs text-red-700">{documentError} All-document search remains available.</p>}
             {nextOffset !== null && <button type="button" disabled={loading || loadingDocuments}
               onClick={() => setListOffset(nextOffset)} className="mt-2 text-xs font-semibold text-emerald-800">Load more document choices</button>}
-          </div>
+          </div></div>
         )}
         <label htmlFor="question" className="sr-only">
           Your message
         </label>
         <div className="flex items-end gap-3 rounded-xl border border-slate-200 bg-white p-3">
           <textarea
+            ref={composerInput}
             id="question"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -398,7 +432,7 @@ export function ChatWorkspace({
             disabled={loading || historyBusy || activePending || !providerEnabled}
             maxLength={messageLimit}
             rows={2}
-            placeholder={isLocal ? "Ask about your ingested documents…" : "Send a local test message…"}
+            placeholder={isLocal ? "What would you like to understand?" : "Send a local test message…"}
             aria-describedby="chat-status chat-hint"
             className="min-w-0 flex-1 resize-none bg-transparent p-1 text-sm placeholder:text-slate-400 disabled:opacity-70"
           />
@@ -420,13 +454,13 @@ export function ChatWorkspace({
           Enter to send · Shift+Enter for a new line ·{" "}
           {messageLimit.toLocaleString()} characters max
         </p>
-        <p
+        <details className="composer-privacy"><summary>Private, local AI · About chat history</summary><p
           id="chat-status"
           className="mt-2 text-center text-xs leading-5 text-slate-500"
         >
-          {isLocal ? "Answers use your selected documents. Check Sources to verify the evidence." : "Saved mock demo chats. No documents are retrieved."}
+          {isLocal ? chatMode === "general" ? "General AI replies are not based on your documents." : chatMode === "auto" ? "Auto labels each answer as document-based or General AI." : "Answers use your selected documents. Check Sources to verify the evidence." : "Saved mock demo chats. No documents are retrieved."}
           {" "}History is restored on reload. Earlier messages are not sent to the model.
-        </p>
+        </p></details>
       </form>
     </section>
   );

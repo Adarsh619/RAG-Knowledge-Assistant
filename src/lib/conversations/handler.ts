@@ -66,18 +66,21 @@ export async function handleConversationTurn(
   let pending: { requestId: string; attemptId: string } | null = null;
   try {
     gate(request, context); requireUuid(id, "conversation");
-    const input = await body(request, ["message", "documentId", "requestId"]);
+    const input = await body(request, ["message", "documentId", "requestId", "chatMode"]);
     const requestId = requireUuid(input.requestId, "request ID");
-    const validated = validateChatInput({ message: input.message, documentId: input.documentId });
+    const validated = validateChatInput({ message: input.message, documentId: input.documentId, chatMode: input.chatMode });
     request.signal.throwIfAborted();
     const started = await context!.conversations.begin(id, requestId, validated.message, validated.search?.documentId ?? null);
-    if (started.assistantMessage) return json({ conversation: started.conversation,
-      userMessage: started.userMessage, assistantMessage: started.assistantMessage });
+    if (started.assistantMessage) {
+      if ((started.assistantMessage.rag?.chatMode ?? "documents") !== validated.chatMode)
+        throw new InputError("This saved request used another chat mode. Send a new question instead of replaying it.", 409);
+      return json({ conversation: started.conversation, userMessage: started.userMessage, assistantMessage: started.assistantMessage });
+    }
     pending = { requestId, attemptId: started.attemptId };
     // Reuse the existing authenticated RAG/mock handler. No history, citations or owner can be supplied by the browser.
     const generationRequest = new Request(request.url, { method: "POST",
       headers: { "Content-Type": "application/json", origin: new URL(request.url).origin },
-      body: JSON.stringify({ message: validated.message, documentId: validated.search?.documentId ?? null }),
+      body: JSON.stringify({ message: validated.message, documentId: validated.search?.documentId ?? null, chatMode: validated.chatMode }),
       signal: request.signal,
     });
     const generated = await generate(generationRequest, context!);

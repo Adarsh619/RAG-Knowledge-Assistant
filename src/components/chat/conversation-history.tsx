@@ -1,6 +1,9 @@
 "use client";
-
 import { useState } from "react";
+import { Icon } from "@/components/ui/icon";
+import { Modal } from "@/components/ui/modal";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { ShellSlot } from "@/components/shell-context";
 import type { Conversation } from "@/types/conversation";
 
 export function ConversationHistory({ conversations, selectedId, busy, nextOffset, onNew, onOpen, onDelete, onMore }: {
@@ -8,32 +11,16 @@ export function ConversationHistory({ conversations, selectedId, busy, nextOffse
   onNew: () => void; onOpen: (id: string) => void; onDelete: (id: string) => void; onMore: () => void;
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  return <section aria-label="Saved conversations" className="border-b border-slate-100 bg-slate-50/60 p-5">
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold text-slate-700">Your conversations</h2>
-      <button type="button" disabled={busy} onClick={onNew}
-        className="rounded-lg bg-emerald-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">New Chat</button>
-    </div>
-    <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
-      {conversations.map(conversation => <div key={conversation.id} data-conversation-id={conversation.id}
-        className={`rounded-xl border p-3 ${selectedId === conversation.id ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}>
-        <button type="button" disabled={busy} onClick={() => onOpen(conversation.id)}
-          aria-current={selectedId === conversation.id ? "true" : undefined}
-          className="block min-h-10 w-full text-left text-sm font-medium text-slate-700 wrap-anywhere disabled:opacity-50">{conversation.title}</button>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span>{new Date(conversation.updatedAt).toLocaleString()}</span>
-          {confirmId === conversation.id ? <span className="flex flex-wrap gap-3">
-            <button type="button" disabled={busy} onClick={() => { setConfirmId(null); onDelete(conversation.id); }}
-              className="font-semibold text-red-700">Confirm delete conversation</button>
-            <button type="button" disabled={busy} onClick={() => setConfirmId(null)}>Cancel</button>
-          </span> : <button type="button" disabled={busy} onClick={() => setConfirmId(conversation.id)}
-            aria-label={`Delete conversation: ${conversation.title}`} className="text-red-700">Delete</button>}
-        </div>
-        {confirmId === conversation.id && <p className="mt-2 text-xs text-red-700">Permanently removes this conversation, messages and saved evidence. PDFs are kept.</p>}
-      </div>)}
-    </div>
-    {conversations.length === 0 && <p className="text-xs text-slate-500">Start a new chat to save your questions and answers.</p>}
-    {nextOffset !== null && <button type="button" disabled={busy} onClick={onMore}
-      className="mt-3 text-xs font-semibold text-emerald-800">Load more conversations</button>}
+  const deleting = conversations.find(conversation => conversation.id === confirmId);
+  return <section aria-label="Saved conversations" className="history-section">
+    <ShellSlot region="newChat"><button type="button" disabled={busy} onClick={onNew} className="new-chat-button" aria-label="New Chat" title="New chat"><Icon name="plus" /><span className="sidebar-label">New Chat</span></button></ShellSlot>
+    <h2>Recent conversations</h2>
+    {conversations.map(conversation => <div key={conversation.id} data-conversation-id={conversation.id} className={`history-item ${selectedId === conversation.id ? "active" : ""}`}>
+      <button type="button" disabled={busy} onClick={() => onOpen(conversation.id)} aria-current={selectedId === conversation.id ? "true" : undefined} className="history-title" title={conversation.title}>{conversation.title}</button>
+      <span className="history-date">{new Date(conversation.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span><ActionMenu label={`Actions for conversation: ${conversation.title}`}><button type="button" disabled={busy} onClick={() => setConfirmId(conversation.id)} className="danger-action"><Icon name="delete" />Delete conversation</button></ActionMenu>
+    </div>)}
+    {!conversations.length && <p className="px-2 text-xs leading-5 text-slate-500">Start your first conversation.</p>}
+    {nextOffset !== null && <button type="button" disabled={busy} onClick={onMore} className="history-refresh">Load more conversations</button>}
+    {deleting && <Modal title="Delete conversation?" onClose={() => setConfirmId(null)}><p className="font-semibold wrap-anywhere">{deleting.title}</p><p className="muted mt-3">Permanently remove this conversation, its messages and saved source evidence? Your PDFs will be kept.</p><div className="mt-6 flex flex-wrap justify-end gap-3"><button type="button" disabled={busy} className="secondary-link" onClick={() => setConfirmId(null)}>Cancel</button><button type="button" disabled={busy} className="primary-link" onClick={() => { setConfirmId(null); onDelete(deleting.id); }}>Confirm delete conversation</button></div></Modal>}
   </section>;
 }

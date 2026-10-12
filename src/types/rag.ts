@@ -12,7 +12,9 @@ export interface RagSource {
 }
 
 export interface RagSummary {
-  status: "generated" | "insufficient_context";
+  status: "generated" | "insufficient_context" | "general";
+  /** Requested UI behaviour; legacy answers default to documents. */
+  chatMode?: "documents" | "general" | "auto";
   model: string | null;
   retrievedChunkCount: number;
   contextChunkCount: number;
