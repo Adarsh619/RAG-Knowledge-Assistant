@@ -12,7 +12,7 @@ The handler checks downloaded size and the PDF header before calling the parser.
 
 `POST /api/documents/extract` verifies the session with `auth.getUser()` and returns `{ document, extraction, chunking }` with `Cache-Control: private, no-store`. Phase 6 adds local chunking after parsing, in the same authenticated handler; it does not accept client text, owner paths, or chunk settings. The middleware covers nested document APIs. The browser renders plain text through React, not HTML, and displays at most three nonempty pages with 1,500 characters per page, plus a chunk inspector. The response preserves the complete accepted page text; only the page preview is shortened. Closing, refreshing, or leaving the page clears both in-memory previews. Deleting the matching document clears them.
 
-No application table or extracted-text persistence is needed. The local chunker consumes `pages` and preserves physical page metadata. See `../rag/README.md` for its algorithm and configuration. No embedding, retrieval, or RAG is performed.
+The extraction-preview endpoint itself does not persist text or perform embeddings, retrieval or RAG. The completed ingestion flow separately consumes extraction/chunking output and persists chunks with embeddings through the knowledge layer. See [chunking](../rag/README.md) and the [pipeline walkthrough](../../../docs/pipelines.md).
 
 Run `npm run test:pdf` for the real parser and official SDK against generated PDFs and an offline Storage fixture. The test blocks fetch/HTTP/HTTPS/TCP/TLS before external I/O and asserts zero outbound attempts. The different-user fixture checks API folder scoping; deployed Storage RLS is checked separately with read-only SQL, not by claiming the fixture implements Supabase's policies.
 

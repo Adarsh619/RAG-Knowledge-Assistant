@@ -1,8 +1,32 @@
 # Architecture
 
+[Documentation index](README.md) · [Pipeline walkthrough](pipelines.md)
+
 The browser renders the UI and handles email/password entry directly with Supabase Auth. Cookie sessions are refreshed by Next.js middleware. Protected layouts and server API handlers verify authentication; authenticated Supabase clients preserve database/Storage RLS.
 
 ## Boundaries
+
+```mermaid
+flowchart TD
+  U[Browser] --> N[Next.js on local machine]
+  N <--> A[Supabase Auth]
+  N <--> B[Private Supabase PDF Storage]
+  B --> P[Local PDF extraction]
+  P --> K[Page-aware chunking]
+  K --> E[Local MiniLM embeddings]
+  E --> D[Supabase PostgreSQL and pgvector with owner RLS]
+  N --> Q[Local query embedding]
+  Q --> D
+  D --> R[Owned retrieval results]
+  R --> C[Bounded grounded context]
+  C --> O[Localhost Ollama]
+  O --> V[Answer and application-derived citations]
+  V --> S[Supabase conversations and messages]
+  S --> N
+  N --> U
+```
+
+This diagram shows the Documents path. General AI and Auto dispatch are described below. Supabase is hosted; PDF processing, embeddings and generative inference execute on the local machine.
 
 | Location | Responsibilities | Data |
 | --- | --- | --- |
@@ -32,6 +56,33 @@ The RAG assembler takes up to five chunks above 0.30, removes duplicate chunk ID
 Ollama inventory is checked before private context is sent. Only the pinned local `qwen3:4b-instruct` manifest, GGUF family/quantization and loopback origin are accepted. Redirects, cloud aliases and model pulls are blocked. Generation uses a 120-second timeout, 8,192-token context and 384-token output limit. A malformed/incomplete response becomes a visible failed turn, not an invented successful answer.
 
 Source identity comes from context chunks, not model text. Excerpts are exact prefixes of stored content, shortened for display. Grouping one document's chunks reduces visual repetition while preserving each passage's page/rank/score information. These are input sources, not automatic claim verification.
+
+## Chat-mode dispatch
+
+`LLM_MODE` selects the server provider; `chatMode` selects behavior within local mode. They are independent. Mock chat performs no embeddings, retrieval or generation; OpenAI is disabled.
+
+```mermaid
+flowchart TD
+  Q[Authenticated question] --> M{Chat mode}
+  M -->|Documents or Auto| E[Local MiniLM query embedding]
+  E --> R[Owned ready chunks via pgvector and RLS]
+  R --> C{Usable evidence?}
+  C -->|Yes| P[Bounded grounded prompt]
+  P --> O[Local Ollama]
+  O --> A[Answer plus retrieval-derived sources]
+  C -->|No, Documents| I[Insufficient information; no generation]
+  C -->|No, Auto| G[General local prompt]
+  M -->|General AI| G
+  G --> L[Local Ollama]
+  L --> N[General answer; no document citations]
+  A --> S[Persist answer and provenance]
+  I --> S
+  N --> S
+```
+
+Auto falls back only when retrieval succeeds but provides insufficient usable context. An authentication, embedding, retrieval or runtime error remains an error. General AI never performs document retrieval. Scope remains separately validated and owner-checked, including when persisted with a general turn.
+
+The last completed assistant response stores requested mode and provenance in existing `rag` JSON metadata. Reopening a conversation restores that mode and its saved document scope. A local `groundwork.chat-mode` preference supplies the new-chat default; no new preference table is required. Legacy answers default to Documents.
 
 ## Conversation persistence
 
