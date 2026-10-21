@@ -1,4 +1,6 @@
-# Phase 6: manual document chunking
+# RAG utilities and manual document chunking
+
+This folder now includes chunking, grounded context assembly, answers and source attribution. The algorithm notes below describe the original chunking utility; persistent ingestion uses its output through `src/lib/knowledge`. See the [architecture](../../../docs/architecture.md) and [pipeline walkthrough](../../../docs/pipelines.md) for the completed system, including General AI/Auto dispatch outside this folder.
 
 `chunk-document.ts` is a server-only, deterministic utility. It takes the stored document ID and the extractor's `{ pageNumber, text }` array. It performs no download, database operation, model call, or persistence. The authenticated extraction handler invokes it after parsing; the existing owner-only Storage flow remains the access boundary.
 

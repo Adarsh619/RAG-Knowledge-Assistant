@@ -8,7 +8,7 @@
 
 `middleware.ts` uses `getClaims()` to verify/refresh sessions before rendering. Cookie writes go to both the incoming request and outgoing response. Redirects and 401 responses preserve refreshed cookies and no-cache headers. `src/middleware.ts` selects the routes; this Next.js 15 project uses middleware rather than the Next.js 16 proxy filename.
 
-The protected route group changes organization, not URLs. `/`, `/chat`, and `/documents` require authentication. `/login`, `/signup`, and `/auth/callback` are public. The callback exchanges a PKCE confirmation code for a session and redirects only to an allowed local page.
+The protected route group changes organization, not URLs. `/`, `/chat`, `/documents`, `/account` and `/settings` require authentication, as do protected APIs. `/login`, `/signup`, and `/auth/callback` are public. The callback exchanges a PKCE confirmation code for a session and redirects only to an allowed local page.
 
 Supabase's own Auth service manages authentication records. Phase 3 added only email/password authentication. Phase 4 adds the private `documents` bucket and owner policies in `supabase/storage/documents.sql`. The documents, document_chunks, conversations and messages tables have owner-only RLS; no profile table is used. Document requests use this same server client with the authenticated user's normal session, so Storage RLS remains active. No service-role key is used, and project billing/paid features are untouched.
 

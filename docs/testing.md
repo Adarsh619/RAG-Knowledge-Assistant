@@ -1,5 +1,9 @@
 # Acceptance and regression testing
 
+[Documentation index](README.md) · [Local setup](setup.md)
+
+The final UI pass recorded 218 passing tests, TypeScript, lint and production build. This is historical evidence; the documentation-only review on 2026-10-21 did not rerun those checks.
+
 ## Automated checks
 
 Prepare public MiniLM artifacts once (only with deliberate download approval), then run:
@@ -22,9 +26,9 @@ Run the production build locally on loopback with local Ollama available. Use di
 1. Sign up/confirm or sign in directly in the app. Never give test automation/chat your password. Test an invalid password and a signed-out protected route; reload and confirm the legitimate session persists. Sign out and verify APIs return 401. If using an existing session, record that fresh signup/login/logout were not rerun.
 2. Upload a text PDF ≤4 MiB; verify listing/name/size/date and refresh. Reject `.txt`, a false PDF header, an empty file and >4 MiB. Existing scripts can generate these fixtures without real private data.
 3. Extract text; verify physical pages and readable preview. Inspect chunks ≤1,200 characters with ≤200 overlap. Empty/image-only PDFs should produce no chunks; malformed/encrypted inputs should fail visibly.
-4. Ingest, wait for Ready, refresh and confirm persisted chunk/model/date metadata. Re-ingest; verify the same document record persists without indefinite duplicates.
+4. Choose Process for AI, wait for Ready, refresh and confirm persisted chunk/model/date metadata. Re-process; verify the same document record persists without indefinite duplicates.
 5. Search a known topic across all ready documents and in one document. Inspect pages/excerpts/scores. Change top-k/threshold within their bounds; unrelated questions should score lower.
-6. Ask a standalone question answered by the PDF. Inspect the grounded local answer and Sources; verify the filename, pages and excerpt against the PDF. Ask an unrelated question and expect insufficient-context behavior/no misleading sources.
+6. Select Documents mode and ask a standalone question answered by the PDF. Inspect the grounded local answer and Sources; verify the filename, pages and excerpt against the PDF. Ask an unrelated question and expect insufficient-context behavior/no misleading sources. In General AI mode, verify a general question works without PDFs and has no sources. In Auto, verify a related question uses documents and an unrelated question returns a labelled general answer without citations. Test both all-document and single-document scope.
 7. Create another conversation, switch between them, reload the selected conversation URL and verify separation, scope and original evidence. Resend/retry an interrupted turn rather than producing duplicate questions. Deleting a source must not silently broaden a saved scope; historical evidence remains a snapshot.
 8. Temporarily stop Ollama yourself (do not remove models). Ask a supported question: show local start instructions, persist a failed/pending question without a completed invented assistant record, and offer retry. Restart Ollama and retry. Offline tests cover model absence, malformed/oversized responses, timeout and unsupported model/endpoint without changing the machine's model inventory.
 9. Use keyboard Tab/Shift+Tab; verify visible focus, labelled controls, Enter-to-send, Shift+Enter multiline and expandable source cards. Test 375 px mobile and 200% zoom; long filenames/answers must wrap, controls remain usable, and the document library stacks into labelled rows.
@@ -59,4 +63,13 @@ Record date, app commit/build, browser profiles, expected/actual outcomes, and f
 
 ## Release gate
 
-Use [the release checklist](release.md) and update [Phase 13 results](phase-13.md) with honest pass/pending status. Previous phase live evidence is regression history, not a fresh Phase 13 sign-up run.
+Use [the release checklist](release.md) and record each new run separately with date and revision. Preserve [Phase 13 results](phase-13.md) and [the final UI report](final-ui-ux.md) as historical records. Previous live evidence is regression history, not a fresh signup or isolation test.
+
+## UI acceptance
+
+- Check expanded/collapsed navigation, delayed icon tooltips, active routes, New Chat focus and conversation overflow menus.
+- Check independent context drawers at desktop/tablet/mobile widths, Escape, focus containment/restoration and reduced motion.
+- Verify Light/Dark/System from header and Settings, synchronization and persistence after reload.
+- Open Account/Settings, confirm verified account details and genuine counts; do not publish account screenshots without redaction.
+- Check Choose PDF and physical drag-and-drop, pointer/disabled states, processing details and Ask about this document (must select Documents mode and the clicked document).
+- Check composer visibility with a mobile virtual keyboard, no horizontal overflow, Enter/Shift+Enter and keyboard focus. Physical dragging, phone keyboard and second-real-user validation remain pending in the final UI report.

@@ -1,5 +1,7 @@
 # Security review — Phase 13
 
+This is the historical Phase 13 review. Dependency audit and deployed project/plan observations below are point-in-time results, not reverified by the 2026-10-21 documentation-only review. Rerun the documented release checks before publishing. Later UI changes retained these boundaries and added protected Account/Settings routes; see [the final UI report](final-ui-ux.md).
+
 ## Verified controls
 
 | Area | Control |
@@ -30,7 +32,7 @@ The permission-only migration conditionally revokes EXECUTE on `public.rls_auto_
 - No strict nonce-based Content Security Policy is added; Next.js inline scripts require a deliberate compatible policy. Frame denial and MIME/referrer headers provide narrower protections. Do not claim full production hardening.
 - Next.js/npm audit should be rerun before each release; a clean audit is point-in-time evidence, not a permanent guarantee.
 
-The final production audit (`npm audit --omit=dev`) reports zero advisories after the approved Next.js 15.5.27 patch and scoped PostCSS 8.5.29 override. The full audit retains five high-severity dependency entries in the development ESLint/fast-glob/micromatch chain, stemming from [braces stack-exhaustion with deeply nested patterns](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). The registry's latest braces version remains 3.0.3, which is affected. These tools consume trusted repository patterns, not uploaded PDFs. No forced framework downgrade/major upgrade is performed to silence this report. Restrict build inputs to trusted code and revisit the upstream fix before any release that handles untrusted build patterns.
+The recorded Phase 13 production audit (`npm audit --omit=dev`) reported zero advisories after the approved Next.js 15.5.27 patch and scoped PostCSS 8.5.29 override. Its full audit retained five high-severity dependency entries in the development ESLint/fast-glob/micromatch chain, stemming from [braces stack-exhaustion with deeply nested patterns](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). This describes that audit's dependency tree, not the current registry's patch availability. These tools consume trusted repository patterns, not uploaded PDFs. No forced framework downgrade/major upgrade was performed to silence that report. Restrict build inputs to trusted code and reassess advisories before release.
 
 ## Supabase advisor status
 

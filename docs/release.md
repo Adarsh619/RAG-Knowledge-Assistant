@@ -4,7 +4,7 @@
 
 Run Next.js, prepared offline MiniLM and Ollama on the same computer. Keep Next.js and Ollama bound to loopback. Supabase Free hosts Auth, private Storage and PostgreSQL/pgvector. This enables the full document/chat workflow without a hosted inference API.
 
-Prerequisites and first-install commands are in [README](../README.md). On an already prepared checkout, use:
+Prerequisites and first-install commands are in [local setup](setup.md). On an already prepared checkout, use:
 
 ```bash
 npm run release:check -- --runtime
@@ -15,7 +15,7 @@ npm run build
 npm run start -- --hostname 127.0.0.1
 ```
 
-Open `http://localhost:3000`, authenticate, upload → Ingest → wait for Ready → Chat. Stop the dev server before building or starting the production server in the same checkout. No setup script automatically pulls the generative model or starts a cloud provider.
+Open `http://localhost:3000`, authenticate, upload → Process for AI → wait for Ready → Chat. Stop the dev server before building or starting the production server in the same checkout. No setup script automatically pulls the generative model or starts a cloud provider.
 
 ## Public portfolio presentation — recommended
 
@@ -32,6 +32,8 @@ No deployment is performed in Phase 13. Deployment requires explicit approval.
 Full remote generation would require a generative runtime alongside a persistent application server, secure networking/access controls and sufficient CPU/GPU resources. Hosted inference providers or GPU services can incur costs; a self-hosted machine also requires operational infrastructure. None is provisioned or implied to be zero-cost here. A tunnel/public port would expose your machine and is not an acceptable automatic workaround.
 
 ## Checklist before publishing
+
+Checked boxes below record Phase 13 evidence, not a fresh release certification. The final UI pass later recorded 218 passing tests plus TypeScript/lint/build; see [its report](final-ui-ux.md). Rerun checks and audit for the actual release checkout. The 2026-10-21 documentation review did not rerun those runtime/security checks.
 
 - [x] TypeScript, lint, all 200 tests and production build pass on the Phase 13 checkout.
 - [x] Production audit has zero advisories; the remaining development-only braces chain is documented.
