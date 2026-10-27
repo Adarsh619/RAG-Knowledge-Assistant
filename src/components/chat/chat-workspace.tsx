@@ -8,7 +8,7 @@ import { ShellSlot, AiBadge, DemoNotice, useShell } from "@/components/shell-con
 import { parseDocumentScope, parseChatMode, CHAT_MODE_KEY } from "@/lib/ui/preferences";
 import type { ChatMode } from "@/types/chat";
 import { ChatSources } from "./chat-sources";
-import { readApiResponse } from "@/lib/http/client-response";
+import { readApiResponse, readTurnResponse } from "@/lib/http/client-response";
 import { ConversationHistory } from "./conversation-history";
 import { useRouter } from "next/navigation";
 import { REPLY_LEASE_MS } from "@/types/conversation";
@@ -37,6 +37,7 @@ export function ChatWorkspace({
   const [historyBusy, setHistoryBusy] = useState(true);
   const [clock, setClock] = useState(0);
   const [pendingText, setPendingText] = useState<string | null>(null);
+  const [streamText, setStreamText] = useState<string | null>(null);
   const historyOperation = useRef(false);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
@@ -198,16 +199,21 @@ export function ChatWorkspace({
       if (!conversationId) conversationId = (await newConversation(scope)).id;
       const controller = new AbortController();
       chatRequest.current = controller;
-      const data = await api<ConversationTurnResponse>(`/api/conversations/${conversationId}/messages`, {
+      // Ask for a streamed reply; the server falls back to plain JSON for errors and saved replays.
+      // The browser bound covers the server's longest configurable generation (300 s) plus retrieval.
+      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "application/x-ndjson, application/json" },
         body: JSON.stringify({
           message, documentId: scope, requestId, chatMode: isLocal ? requestedMode : "documents",
         }),
         signal: AbortSignal.any([
-          controller.signal, AbortSignal.timeout(isLocal ? 150000 : 15000),
+          controller.signal, AbortSignal.timeout(isLocal ? 330000 : 15000),
         ]),
       });
+      const data = await readTurnResponse<ConversationTurnResponse>(response,
+        text => setStreamText(current => (current ?? "") + text));
       setActive(data.conversation); setDocumentId(data.conversation.documentId ?? "");
       setMessages(current => [...current.filter(item => item.requestId !== requestId), data.userMessage, data.assistantMessage]
         .sort((a, b) => a.turnIndex - b.turnIndex || (a.role === "user" ? -1 : 1)));
@@ -234,6 +240,7 @@ export function ChatWorkspace({
       sending.current = false;
       setLoading(false);
       setPendingText(null);
+      setStreamText(null);
     }
   }
 
@@ -390,6 +397,11 @@ export function ChatWorkspace({
         className="px-6 text-xs text-slate-500"
       >
         {pendingText && <p className="my-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900 whitespace-pre-wrap wrap-anywhere">Sending: {pendingText}</p>}
+        {/* Hidden from screen readers while it grows; the saved answer is announced once complete. */}
+        {streamText && <div aria-hidden="true" className="message-body assistant-message mb-4">
+          <p className="mb-2 text-[11px] font-semibold text-emerald-800">Writing answer…</p>
+          <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">{streamText}</p>
+        </div>}
         {activePending && !loading && <p className="pb-4">A saved reply is in progress. Refresh history; interrupted attempts can be retried after five minutes.</p>}
         {loading && <p className="pb-4">{isLocal
           ? chatMode === "general" ? "Your local AI is preparing an answer…" : "Checking your documents and preparing an answer locally…"

@@ -13,7 +13,9 @@ import { buildRagSources } from "./sources.ts";
 export async function answerFromDocuments(
   input: SearchInput,
   context: SearchContext,
-  options: { provider?: LlmProvider; generateQuery?: typeof embedQuery; signal?: AbortSignal } = {},
+  options: {
+    provider?: LlmProvider; generateQuery?: typeof embedQuery; signal?: AbortSignal; onText?: (text: string) => void;
+  } = {},
 ): Promise<{ content: string; rag: RagSummary; sources: RagSource[] }> {
   const provider = options.provider ?? getLlmProvider();
   if (provider.mode !== "local" || !provider.enabled)
@@ -37,7 +39,7 @@ export async function answerFromDocuments(
       rag: { ...summary, status: "insufficient_context", model: null },
     };
   const content = await provider.reply(prompt.user, {
-    system: prompt.system, signal: options.signal,
+    system: prompt.system, signal: options.signal, onText: options.onText,
   });
   return {
     content,

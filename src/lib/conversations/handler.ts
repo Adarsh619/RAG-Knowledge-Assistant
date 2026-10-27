@@ -1,5 +1,5 @@
 import "server-only";
-import type { ChatResponse } from "../../types/chat.ts";
+import type { ChatResponse, TurnStreamEvent } from "../../types/chat.ts";
 import type { SearchContext } from "../retrieval/search-handler.ts";
 import { handleChatRequest, validateChatInput } from "../ai/chat-handler.ts";
 import { LocalLlmError } from "../ai/local-config.ts";
@@ -77,25 +77,75 @@ export async function handleConversationTurn(
       return json({ conversation: started.conversation, userMessage: started.userMessage, assistantMessage: started.assistantMessage });
     }
     pending = { requestId, attemptId: started.attemptId };
+    const attemptId = started.attemptId;
     // Reuse the existing authenticated RAG/mock handler. No history, citations or owner can be supplied by the browser.
     const generationRequest = new Request(request.url, { method: "POST",
       headers: { "Content-Type": "application/json", origin: new URL(request.url).origin },
       body: JSON.stringify({ message: validated.message, documentId: validated.search?.documentId ?? null, chatMode: validated.chatMode }),
       signal: request.signal,
     });
-    const generated = await generate(generationRequest, context!);
-    if (!generated.ok) {
-      await context!.conversations.fail(id, requestId, pending.attemptId);
-      return generated;
-    }
-    request.signal.throwIfAborted();
-    const reply = await generated.json() as ChatResponse;
-    return json(await context!.conversations.complete(id, requestId, pending.attemptId, reply));
+    // Saving is identical with or without streaming: the answer and evidence are persisted once, after generation.
+    const finish = async (onText?: (text: string) => void) => {
+      try {
+        const generated = await generate(generationRequest, context!, undefined, undefined, onText);
+        if (!generated.ok) {
+          await context!.conversations.fail(id, requestId, attemptId);
+          return generated;
+        }
+        request.signal.throwIfAborted();
+        const reply = await generated.json() as ChatResponse;
+        return json(await context!.conversations.complete(id, requestId, attemptId, reply));
+      } catch (cause) {
+        await failPending(context, id, pending);
+        return error(cause);
+      }
+    };
+    return wantsStream(request) ? streamTurn(finish) : await finish();
   } catch (cause) {
-    if (pending && context) {
-      try { await context.conversations.fail(id, pending.requestId, pending.attemptId); }
-      catch { /* A transport outage leaves an honestly pending row; lease expiry permits retry. */ }
-    }
+    await failPending(context, id, pending);
     return error(cause);
   }
+}
+
+async function failPending(context: ConversationContext | null, id: string,
+  pending: { requestId: string; attemptId: string } | null) {
+  if (!pending || !context) return;
+  try { await context.conversations.fail(id, pending.requestId, pending.attemptId); }
+  catch { /* A transport outage leaves an honestly pending row; lease expiry permits retry. */ }
+}
+
+function wantsStream(request: Request) {
+  return request.headers.get("accept")?.split(",").some(type => type.split(";")[0].trim() === "application/x-ndjson") ?? false;
+}
+
+// Streams text as it is generated, then one final event carrying the same body the JSON response would.
+// Errors before generation starts still return ordinary JSON with their HTTP status.
+function streamTurn(finish: (onText: (text: string) => void) => Promise<Response>) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let open = true;
+      const send = (event: TurnStreamEvent<unknown>) => {
+        if (!open) return;
+        try { controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`)); }
+        catch { open = false; } // The browser disconnected; generation is cancelled through the request signal.
+      };
+      try {
+        const response = await finish(text => { if (text) send({ type: "delta", text }); });
+        const data: unknown = await response.json();
+        send(response.ok ? { type: "done", data } : { type: "error", status: response.status,
+          error: data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error : "The reply could not be completed." });
+      } catch {
+        send({ type: "error", status: 500, error: "The reply could not be completed. Refresh to check saved messages before retrying." });
+      } finally {
+        if (open) try { controller.close(); } catch { /* Already closed by the browser. */ }
+      }
+    },
+  });
+  return new Response(body, { headers: {
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Cache-Control": "private, no-store",
+    "X-Accel-Buffering": "no", // Ask reverse proxies not to hold back partial answers.
+  } });
 }
