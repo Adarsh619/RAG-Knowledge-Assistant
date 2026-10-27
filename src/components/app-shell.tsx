@@ -94,7 +94,7 @@ export function AppShell({ children, userEmail, emailVerified = false }: { child
       </div>
       <aside ref={context} id="workspace-context" className="workspace-context" inert={!rightOpen ? true : undefined} role={mobile && rightOpen ? "dialog" : undefined} aria-modal={mobile && rightOpen ? true : undefined} aria-label="Context panel" onKeyDown={event => { if (event.key === "Escape") setRightOpen(false); }}>
         <div className="context-heading"><span>CONTEXT</span><button className="icon-button" aria-label="Close context drawer" onClick={toggleContext}><Icon name="close" /></button></div><div ref={setContextHost} className="context-content" />
-        {pathname === "/" && <div className="context-content"><h2>Your private workspace</h2><p>Upload a PDF, process it for AI, then start a conversation. Every grounded answer includes the passages used.</p><AiBadge /><p>PDFs and saved conversations use your private account. AI processing runs on this computer.</p></div>}
+        {pathname === "/" && <div className="context-content"><h2>Your private workspace</h2><p>Upload a PDF, process it for AI, then start a conversation. Every grounded answer includes the passages used.</p><AiBadge /><p>PDFs and saved conversations use your private account. AI processing runs on Groundwork’s own server, not a hosted AI service.</p></div>}
       </aside>
     </div>
   </ShellContext.Provider>;

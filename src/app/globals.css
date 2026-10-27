@@ -132,6 +132,7 @@ button:disabled { opacity:.55; }
 .topbar-start,.topbar-end { display:flex; align-items:center; gap:15px; min-width:0; }
 .breadcrumbs { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); }.breadcrumbs a:hover { text-decoration:underline; }.breadcrumbs [aria-current="page"] { color:var(--ink); font-weight:600; }
 .workspace-content { max-width:1320px; margin:0 auto; padding:36px; }
+.demo-notice { margin:0; padding:10px 24px; font-size:12px; line-height:1.5; color:var(--muted); background:var(--surface); border-bottom:1px solid var(--line); }
 .ai-badge { display:inline-flex; align-items:center; gap:7px; font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap; }
 .status-dot { height:6px; width:6px; border-radius:50%; background:#b58a49; }.is-available .status-dot { background:#4caa79; }
 .workspace-context { visibility:hidden; opacity:0; position:sticky; top:0; height:100dvh; overflow:hidden auto; background:var(--surface); border-left:1px solid var(--line); min-width:0; transition:opacity 160ms ease,visibility 180ms; }

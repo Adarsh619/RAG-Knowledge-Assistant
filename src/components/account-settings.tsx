@@ -8,7 +8,7 @@ import { loadWorkspaceSummary } from "@/lib/ui/workspace-summary";
 import type { ChatMode } from "@/types/chat";
 
 function Privacy() {
-  return <section id="privacy" className="preference-section"><h2>Privacy</h2><p>Your documents remain private to your account. PDFs, search vectors and saved conversations are stored in Supabase with ownership protection.</p><p>Text processing and AI generation run locally. No OpenAI or hosted AI service is used. Saved citation excerpts remain until their conversation is deleted.</p></section>;
+  return <section id="privacy" className="preference-section"><h2>Privacy</h2><p>Your documents remain private to your account. PDFs, search vectors and saved conversations are stored in Supabase with ownership protection.</p><p>Text processing and AI generation run on Groundwork’s own server. No OpenAI or hosted AI service is used. Saved citation excerpts remain until their conversation is deleted.</p></section>;
 }
 export function SettingsWorkspace() {
   const { ai, aiLoading, refreshAi } = useShell();
@@ -20,7 +20,9 @@ export function SettingsWorkspace() {
   }, []);
   return <div className="preferences-page">
     <section id="appearance" className="preference-section"><h2>Appearance</h2><p>Choose a look, or follow your device.</p><ThemePicker /></section>
-    <section id="local-ai" className="preference-section"><div className="preference-heading"><h2>Local AI</h2><button className="text-button" disabled={aiLoading} onClick={() => void refreshAi()}>{aiLoading ? "Checking…" : "Check status"}</button></div><AiBadge /><p>{aiLoading ? "Checking availability on this computer…" : ai?.detail ?? "Status could not be checked. Please try again."}</p><label htmlFor="default-mode">Default chat mode</label><select id="default-mode" value={mode} onChange={event => { const next = parseChatMode(event.target.value); setMode(next); try { localStorage.setItem(CHAT_MODE_KEY, next); } catch {} }}><option value="documents">Documents</option><option value="auto">Auto</option><option value="general">General AI</option></select><p className="muted">Applies to new chats in this browser. Existing conversations retain their last completed answer’s mode.</p><details><summary>Local AI guidance</summary><p>Start Ollama with your existing Qwen3 4B instruct model, then check status again. Groundwork never downloads models or switches to cloud AI automatically.</p></details></section>
+    <section id="local-ai" className="preference-section"><div className="preference-heading"><h2>Local AI</h2><button className="text-button" disabled={aiLoading} onClick={() => void refreshAi()}>{aiLoading ? "Checking…" : "Check status"}</button></div><AiBadge /><p>{aiLoading ? "Checking AI availability…" : ai?.detail ?? "Status could not be checked. Please try again."}</p><label htmlFor="default-mode">Default chat mode</label><select id="default-mode" value={mode} onChange={event => { const next = parseChatMode(event.target.value); setMode(next); try { localStorage.setItem(CHAT_MODE_KEY, next); } catch {} }}><option value="documents">Documents</option><option value="auto">Auto</option><option value="general">General AI</option></select><p className="muted">Applies to new chats in this browser. Existing conversations retain their last completed answer’s mode.</p><details><summary>Local AI guidance</summary><p>{ai?.runtime === "embedded"
+      ? "The model runs inside Groundwork’s own server from files prepared at install time (npm run models:prepare)."
+      : "Start Ollama with the reviewed Qwen3 4B instruct model, then check status again."} Groundwork never downloads models at runtime or switches to cloud AI automatically.</p></details></section>
     <Privacy /><ShellSlot region="context"><h2>Your preferences</h2><p>Appearance and default chat mode stay in this browser. No profile table or cloud AI account is required.</p><AiBadge /></ShellSlot>
   </div>;
 }
