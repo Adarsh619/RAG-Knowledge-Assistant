@@ -18,6 +18,7 @@ Run all command examples from the repository root. Source and migration paths in
 | [Security](security.md) | Ownership controls, privacy boundaries and residual risks |
 | [Testing](testing.md) | Automated commands, browser acceptance and pending real-user isolation |
 | [Release strategy](release.md) | Supported local run and safe portfolio presentation |
+| [Hugging Face deployment](deployment-huggingface.md) | Free Docker Space demo with the embedded model |
 | [Workspace UI guide](ui-ux.md) | Theme/preferences and interaction design history |
 | [Final UI report](final-ui-ux.md) | Final UI changes, file inventory and recorded validation |
 | [Phase 13 record](phase-13.md) | Historical hardening changes and audit evidence |

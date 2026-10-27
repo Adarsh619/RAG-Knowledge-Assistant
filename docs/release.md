@@ -17,6 +17,10 @@ npm run start -- --hostname 127.0.0.1
 
 Open `http://localhost:3000`, authenticate, upload → Process for AI → wait for Ready → Chat. Stop the dev server before building or starting the production server in the same checkout. No setup script automatically pulls the generative model or starts a cloud provider.
 
+## Free hosted demo — Hugging Face Docker Space
+
+The embedded runtime (`LOCAL_RUNTIME=embedded`) runs generation inside the Next.js process, so one container on a free CPU Space can serve full RAG with no Ollama process, GPU or paid API. See [Hugging Face deployment](deployment-huggingface.md). The sections below describe the original Ollama-only release reasoning, which still applies to Ollama.
+
 ## Public portfolio presentation — recommended
 
 Publish source code with a reviewed license decision, documentation, redacted synthetic screenshots and a walkthrough recording. A static showcase can explain the architecture and demonstrate the UI without connecting strangers to a private Supabase project or local runtime.
