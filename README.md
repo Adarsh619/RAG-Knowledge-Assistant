@@ -1,8 +1,21 @@
+---
+title: Groundwork RAG Knowledge Assistant
+emoji: 📚
+colorFrom: green
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Private PDF Q&A with grounded answers and citations
+---
+
 # Groundwork — RAG Knowledge Assistant
 
 A private PDF knowledge assistant built with Next.js, Supabase and local AI. Upload documents, ask grounded questions, inspect the source evidence, and resume saved conversations. The RAG pipeline is implemented directly in TypeScript without a RAG framework.
 
-**Release target:** a local portfolio application with a Supabase Free backend. Generation runs on the same machine as Next.js; this is not an unattended cloud RAG deployment. No paid AI APIs are used.
+**Release target:** a portfolio application with a Supabase Free backend, at zero cost. Generation runs on the same machine as Next.js — either through a local Ollama process, or embedded inside the Next.js process with Transformers.js. The embedded mode powers a free Hugging Face Docker Space demo; see [Hugging Face deployment](docs/deployment-huggingface.md). No paid AI APIs are used.
+
+> The block at the top of this file is Hugging Face Space configuration (it renders as a small table on GitHub).
 
 ## Features
 

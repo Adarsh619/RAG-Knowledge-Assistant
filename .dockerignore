@@ -1,0 +1,20 @@
+# Never send secrets or local state into the image build.
+.env*
+!.env.example
+.git
+.claude
+.vercel
+
+# Rebuilt or re-downloaded inside the image.
+node_modules
+.next
+.setup-cache
+*.tsbuildinfo
+next-env.d.ts
+
+# Not needed to run the app.
+coverage
+docs/screenshots
+*.log
+Dockerfile
+.dockerignore
