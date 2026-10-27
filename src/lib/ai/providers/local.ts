@@ -2,7 +2,7 @@ import "server-only";
 import type { LlmProvider } from "../../../types/chat.ts";
 import { RAG_LIMITS } from "../../rag/config.ts";
 import {
-  LOCAL_MODEL, LocalLlmError, getLocalModelName, getLocalOrigin,
+  LOCAL_MODEL, LocalLlmError, getGenerationTimeoutMs, getLocalModelName, getLocalOrigin,
 } from "../local-config.ts";
 import { InputError, readLimitedBody } from "../../storage/document-handler.ts";
 
@@ -93,7 +93,7 @@ export function createLocalProvider(transport: typeof fetch = fetch): LlmProvide
         ]));
         const signal = AbortSignal.any([
           ...(options.signal ? [options.signal] : []),
-          AbortSignal.timeout(RAG_LIMITS.generationTimeoutMs),
+          AbortSignal.timeout(getGenerationTimeoutMs()),
         ]);
         const data = await localJson("/api/chat", {
           method: "POST", headers: { "Content-Type": "application/json" }, signal,

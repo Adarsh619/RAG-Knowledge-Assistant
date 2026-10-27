@@ -4,8 +4,8 @@ import type { RagSource, RagSummary } from "../../types/rag.ts";
 import type { LlmProvider } from "../../types/chat.ts";
 import type { SearchContext } from "../retrieval/search-handler.ts";
 import { embedQuery } from "../embeddings/embed-query.ts";
-import { localProvider } from "../ai/providers/local.ts";
-import { LOCAL_MODEL, LocalLlmError } from "../ai/local-config.ts";
+import { getLlmProvider } from "../ai/provider.ts";
+import { LocalLlmError, getActiveLocalModel } from "../ai/local-config.ts";
 import { RAG_LIMITS, INSUFFICIENT_CONTEXT_MESSAGE } from "./config.ts";
 import { assembleRagPrompt } from "./prompt.ts";
 import { buildRagSources } from "./sources.ts";
@@ -15,7 +15,7 @@ export async function answerFromDocuments(
   context: SearchContext,
   options: { provider?: LlmProvider; generateQuery?: typeof embedQuery; signal?: AbortSignal } = {},
 ): Promise<{ content: string; rag: RagSummary; sources: RagSource[] }> {
-  const provider = options.provider ?? localProvider;
+  const provider = options.provider ?? getLlmProvider();
   if (provider.mode !== "local" || !provider.enabled)
     throw new LocalLlmError("Document generation requires the local provider. No external fallback is available.");
   options.signal?.throwIfAborted();
@@ -42,6 +42,6 @@ export async function answerFromDocuments(
   return {
     content,
     sources: buildRagSources(prompt.chunks),
-    rag: { ...summary, status: "generated", model: LOCAL_MODEL.name },
+    rag: { ...summary, status: "generated", model: getActiveLocalModel().name },
   };
 }

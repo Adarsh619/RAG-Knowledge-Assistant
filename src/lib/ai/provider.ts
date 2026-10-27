@@ -3,6 +3,8 @@ import type { LlmMode, LlmProvider } from "../../types/chat.ts";
 import { mockProvider } from "./providers/mock.ts";
 import { openaiProvider } from "./providers/openai.ts";
 import { localProvider } from "./providers/local.ts";
+import { embeddedProvider } from "./providers/embedded.ts";
+import { getLocalRuntime } from "./local-config.ts";
 
 // Only configuration selects the provider. A key never enables OpenAI.
 export function getLlmMode(): LlmMode | null {
@@ -17,7 +19,8 @@ export function getLlmProvider(): LlmProvider {
     case "openai":
       return openaiProvider;
     case "local":
-      return localProvider;
+      // Both runtimes execute on the app's own machine; neither has a hosted fallback.
+      return getLocalRuntime() === "embedded" ? embeddedProvider : localProvider;
     default:
       throw new Error(
         "Unsupported LLM_MODE. Set LLM_MODE=mock and restart the server.",
