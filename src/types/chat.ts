@@ -40,4 +40,12 @@ export interface LlmProvider {
 export interface LlmReplyOptions {
   system: string;
   signal?: AbortSignal;
+  /** Receives text as it is generated. Providers that cannot stream simply never call it. */
+  onText?: (text: string) => void;
 }
+
+/** One line of an application/x-ndjson conversation turn stream. */
+export type TurnStreamEvent<T> =
+  | { type: "delta"; text: string }
+  | { type: "done"; data: T }
+  | { type: "error"; status: number; error: string };

@@ -54,6 +54,7 @@ export async function handleChatRequest(
   context: SearchContext | null,
   runRag = answerFromDocuments,
   runGeneral = answerGenerally,
+  onText?: (text: string) => void,
 ) {
   if (!context) return errorResponse("Sign in to use chat.", 401);
   if (!isSameOrigin(request)) return errorResponse("Cross-site chat is not allowed.", 403);
@@ -67,12 +68,12 @@ export async function handleChatRequest(
     const { message, mode, provider, search, chatMode } = validateChatInput(body);
     if (mode === "local") {
       const documentResult = chatMode !== "general" && search
-        ? await runRag(search, context, { provider, signal: request.signal }) : null;
+        ? await runRag(search, context, { provider, signal: request.signal, onText }) : null;
       // Auto falls back only on a successful, explicitly insufficient retrieval result.
       // Auth, retrieval, embedding or runtime errors never trigger a fallback.
       const result = documentResult && !(chatMode === "auto" && documentResult.rag.status === "insufficient_context")
         ? { ...documentResult, rag: { ...documentResult.rag, chatMode } }
-        : await runGeneral(message, provider, chatMode, request.signal);
+        : await runGeneral(message, provider, chatMode, request.signal, onText);
       return Response.json({
         mode, message: { role: "assistant", content: result.content }, rag: result.rag, sources: result.sources,
       } satisfies ChatResponse, { headers: { "Cache-Control": "private, no-store" } });

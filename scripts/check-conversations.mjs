@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 import { handleConversations, handleConversation, handleConversationTurn } from "../src/lib/conversations/handler.ts";
 import { ConversationError, createConversationRepository } from "../src/lib/conversations/repository.ts";
 import { buildRagSources } from "../src/lib/rag/sources.ts";
+import { readTurnResponse } from "../src/lib/http/client-response.ts";
+import { createEmbeddedProvider } from "../src/lib/ai/providers/embedded.ts";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const doc = "00000000-0000-4000-8000-000000000002";
@@ -183,6 +185,84 @@ test("persistent chat protocol with all external fetch blocked", async t => {
     });
     assert.equal(outbound, 0);
   } finally { globalThis.fetch = originalFetch; if (previous === undefined) delete process.env.LLM_MODE; else process.env.LLM_MODE = previous; }
+});
+
+test("streamed turns send text as generated, then save and return the same final body", async t => {
+  const previous = process.env.LLM_MODE; process.env.LLM_MODE = "local";
+  const streamRequest = body => request(body, "POST", { Accept: "application/x-ndjson, application/json" });
+  const events = async response => (await response.text()).trim().split("\n").map(line => JSON.parse(line));
+  try {
+    await t.test("deltas arrive before the saved answer; persistence happens once", async () => {
+      const { context, rows, counts } = fixture(); const rid = randomUUID();
+      const response = await handleConversationTurn(streamRequest({ message: "React?", requestId: rid }), context, id,
+        async (req, ctx, runRag, runGeneral, onText) => {
+          onText("Cedar uses "); onText(""); onText("useState for state.");
+          assert.equal(rows.get(rid).user.status, "pending"); // Nothing is saved while streaming.
+          return Response.json(answer);
+        });
+      assert.match(response.headers.get("content-type"), /^application\/x-ndjson/);
+      assert.equal(response.headers.get("cache-control"), "private, no-store");
+      const received = await events(response);
+      assert.deepEqual(received.slice(0, 2), [{ type: "delta", text: "Cedar uses " }, { type: "delta", text: "useState for state." }]);
+      assert.equal(received.length, 3); assert.equal(received[2].type, "done");
+      assert.equal(received[2].data.assistantMessage.content, answer.message.content);
+      assert.deepEqual(received[2].data.assistantMessage.sources, evidence);
+      assert.ok(!JSON.stringify(received).includes("attemptId"));
+      assert.equal(counts().completions, 1); assert.equal(rows.get(rid).user.status, "completed");
+    });
+    await t.test("a failed generation streams a sanitized error and marks only that attempt failed", async () => {
+      const { context, rows, counts } = fixture(); const rid = randomUUID();
+      const response = await handleConversationTurn(streamRequest({ message: "React?", requestId: rid }), context, id,
+        async (req, ctx, runRag, runGeneral, onText) => { onText("partial"); return Response.json({ error: "The local generator is busy. Try again shortly." }, { status: 409 }); });
+      const received = await events(response);
+      assert.deepEqual(received.at(-1), { type: "error", status: 409, error: "The local generator is busy. Try again shortly." });
+      assert.equal(rows.get(rid).user.status, "failed"); assert.equal(counts().completions, 0);
+      const thrown = await handleConversationTurn(streamRequest({ message: "Again?", requestId: randomUUID() }), context, id,
+        async () => { throw new Error("secret native trace"); });
+      const last = (await events(thrown)).at(-1);
+      assert.equal(last.type, "error"); assert.doesNotMatch(last.error, /secret/);
+    });
+    await t.test("validation errors and saved replays stay ordinary JSON", async () => {
+      const { context } = fixture(); const body = { message: "React?", requestId: randomUUID() };
+      const invalid = await handleConversationTurn(streamRequest({ message: " ", requestId: randomUUID() }), context, id);
+      assert.equal(invalid.status, 400); assert.match(invalid.headers.get("content-type"), /^application\/json/);
+      await (await handleConversationTurn(request(body), context, id, async () => Response.json(answer))).json();
+      const replay = await handleConversationTurn(streamRequest(body), context, id, async () => assert.fail("Replay must not regenerate"));
+      assert.match(replay.headers.get("content-type"), /^application\/json/);
+      assert.equal((await replay.json()).assistantMessage.content, answer.message.content);
+    });
+    await t.test("without the stream Accept header the original JSON contract is unchanged", async () => {
+      const { context } = fixture();
+      const response = await handleConversationTurn(request({ message: "React?", requestId: randomUUID() }), context, id,
+        async (req, ctx, runRag, runGeneral, onText) => { assert.equal(onText, undefined); return Response.json(answer); });
+      assert.match(response.headers.get("content-type"), /^application\/json/);
+      assert.equal((await response.json()).assistantMessage.content, answer.message.content);
+    });
+  } finally { if (previous === undefined) delete process.env.LLM_MODE; else process.env.LLM_MODE = previous; }
+});
+
+test("browser stream reader handles split lines, errors, truncation and JSON fallback", async () => {
+  const stream = (...parts) => new Response(new ReadableStream({ start(controller) {
+    for (const part of parts) controller.enqueue(new TextEncoder().encode(part)); controller.close();
+  } }), { headers: { "Content-Type": "application/x-ndjson; charset=utf-8" } });
+  const texts = [];
+  const data = await readTurnResponse(stream('{"type":"delta","te', 'xt":"Hel"}\n{"type":"delta","text":"lo"}\n', '{"type":"done","data":{"ok":true}}\n'), text => texts.push(text));
+  assert.deepEqual(texts, ["Hel", "lo"]); assert.deepEqual(data, { ok: true });
+  await assert.rejects(readTurnResponse(stream('{"type":"error","status":409,"error":"Busy."}\n'), () => {}), /Busy\./);
+  await assert.rejects(readTurnResponse(stream('{"type":"error","status":401,"error":"raw"}\n'), () => {}), /Sign in again/);
+  await assert.rejects(readTurnResponse(stream('{"type":"delta","text":"cut"}\n'), () => {}), /ended unexpectedly/);
+  await assert.rejects(readTurnResponse(stream("<html>proxy</html>\n"), () => {}), e => /unreadable/.test(e.message) && !/proxy/.test(e.message));
+  assert.deepEqual(await readTurnResponse(Response.json({ ok: 1 }), () => assert.fail("No deltas")), { ok: 1 });
+  await assert.rejects(readTurnResponse(Response.json({ error: "Nope." }, { status: 400 }), () => {}), /Nope\./);
+});
+
+test("embedded provider forwards generated text to the stream callback", async () => {
+  const pieces = [];
+  const provider = createEmbeddedProvider(async () => ({ async generate(messages, options) {
+    options.onText?.("Hello "); options.onText?.("world."); return { text: "Hello world.", finished: true };
+  } }));
+  assert.equal(await provider.reply("question", { system: "Answer.", onText: text => pieces.push(text) }), "Hello world.");
+  assert.deepEqual(pieces, ["Hello ", "world."]);
 });
 
 test("real Supabase repository mappings and narrowly scoped mutations, offline", async t => {

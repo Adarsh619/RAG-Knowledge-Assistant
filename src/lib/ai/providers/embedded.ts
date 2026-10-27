@@ -44,7 +44,7 @@ export function createEmbeddedProvider(
           result = await generator.generate([
             { role: "system", content: options.system },
             { role: "user", content: message },
-          ], { maxNewTokens: RAG_LIMITS.maxOutputTokens, signal });
+          ], { maxNewTokens: RAG_LIMITS.maxOutputTokens, signal, onText: options.onText });
         } catch (cause) {
           if (cause instanceof LocalLlmError) throw cause;
           if (signal.aborted)
