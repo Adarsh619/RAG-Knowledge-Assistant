@@ -9,7 +9,7 @@ import { localProvider } from "../src/lib/ai/providers/local.ts";
 import { getAiStatus } from "../src/lib/ai/status.ts";
 
 const prompt = { system: "Answer using reference material." };
-const KEYS = ["LLM_MODE", "LOCAL_RUNTIME", "LOCAL_MODEL_ID", "GENERATION_TIMEOUT_MS"];
+const KEYS = ["LLM_MODE", "LOCAL_RUNTIME", "LOCAL_MODEL_ID", "GENERATION_TIMEOUT_MS", "PUBLIC_DEMO"];
 
 async function withEnv(values, run) {
   const old = Object.fromEntries(KEYS.map(key => [key, process.env[key]]));
@@ -114,12 +114,18 @@ test("Missing model files give preparation instructions and allow a later retry"
 
 test("Status reports the selected runtime's model without loading weights", () => withEnv({ LLM_MODE: "local" }, async () => {
   const ollama = await getAiStatus(async () => ({ modelMatches: true }), async () => assert.fail("Wrong runtime"));
-  assert.deepEqual([ollama.available, ollama.model], [true, "Qwen3 4B"]);
+  assert.deepEqual([ollama.available, ollama.model, ollama.runtime, ollama.publicDemo], [true, "Qwen3 4B", "ollama", false]);
   process.env.LOCAL_RUNTIME = "embedded";
+  process.env.PUBLIC_DEMO = "true";
   const missing = await getAiStatus(async () => assert.fail("Wrong runtime"), () => checkEmbeddedRuntime(async () => false));
-  assert.deepEqual([missing.available, missing.model], [false, "Qwen3 0.6B"]);
+  assert.deepEqual([missing.available, missing.model, missing.runtime, missing.publicDemo], [false, "Qwen3 0.6B", "embedded", true]);
   assert.match(missing.detail, /models:prepare/);
   process.env.LOCAL_MODEL_ID = "unreviewed";
   const invalid = await getAiStatus();
   assert.equal(invalid.available, false);
+  assert.match(invalid.detail, /LOCAL_MODEL_ID/);
+  for (const value of ["TRUE", "1", "yes", ""]) {
+    process.env.PUBLIC_DEMO = value;
+    assert.equal((await getAiStatus()).publicDemo, false, value);
+  }
 }));

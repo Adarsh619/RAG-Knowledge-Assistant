@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
-import { ShellSlot, AiBadge, useShell } from "@/components/shell-context";
+import { ShellSlot, AiBadge, DemoNotice, useShell } from "@/components/shell-context";
 import { parseDocumentScope, parseChatMode, CHAT_MODE_KEY } from "@/lib/ui/preferences";
 import type { ChatMode } from "@/types/chat";
 import { ChatSources } from "./chat-sources";
@@ -264,6 +264,7 @@ export function ChatWorkspace({
         </span>
         <AiBadge />
       </div>
+      <DemoNotice />
 
       <ShellSlot region="history"><ConversationHistory conversations={conversations} selectedId={active?.id ?? null}
         busy={loading || historyBusy} nextOffset={historyNext}

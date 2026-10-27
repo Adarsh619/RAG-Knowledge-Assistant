@@ -16,5 +16,12 @@ export function ShellSlot({ region, children }: { region: "history" | "context" 
 export function AiBadge() {
   const { ai, aiLoading } = useShell();
   return <span className={`ai-badge ${ai?.available ? "is-available" : ""}`}><span className="status-dot" />
-    {aiLoading ? "Checking local AI…" : !ai ? "AI status unknown" : ai.mode === "mock" ? "Demo mode" : ai.available ? "Local AI · Qwen3 4B" : "Local AI unavailable"}</span>;
+    {aiLoading ? "Checking local AI…" : !ai ? "AI status unknown" : ai.mode === "mock" ? "Demo mode" : ai.available ? `Local AI · ${ai.model ?? "reviewed model"}` : "Local AI unavailable"}</span>;
+}
+// Shared CPUs answer slowly; say so before visitors assume the demo is broken.
+export function DemoNotice() {
+  const { ai } = useShell();
+  return ai?.publicDemo && ai.mode === "local"
+    ? <p role="note" className="demo-notice">Free public demo on a shared CPU. Answers can take up to a minute, and one answer is generated at a time.</p>
+    : null;
 }
