@@ -28,7 +28,7 @@ One Node.js process does everything the local app did. The Dockerfile bakes both
 
 A separate free demo project is recommended so public visitors never share a database with your personal documents.
 
-1. Create the project, then in **SQL Editor** run, in order, the four files in `supabase/migrations/` and `supabase/storage/documents.sql`. See [Supabase setup](supabase-setup.md).
+1. Create the project, then in **SQL Editor** run `supabase/storage/documents.sql` first, then the four files in `supabase/migrations/` in filename order. See [Supabase setup](supabase-setup.md).
 2. **Authentication → URL Configuration**: set Site URL to `https://<username>-<space>.hf.space` and add `https://<username>-<space>.hf.space/auth/callback` to Redirect URLs.
 3. **Authentication → Sign In / Providers → Email**: the built-in email sender only delivers to your project team and a few emails per hour, so visitors would never receive confirmation emails. For a demo, turn **Confirm email** off, or configure a free SMTP provider.
 4. Copy the project URL and the **publishable** key (`sb_publishable_…`). Never use a service-role or secret key.
