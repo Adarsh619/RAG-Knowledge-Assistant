@@ -4,6 +4,7 @@ import { mockProvider } from "./providers/mock.ts";
 import { openaiProvider } from "./providers/openai.ts";
 import { localProvider } from "./providers/local.ts";
 import { embeddedProvider } from "./providers/embedded.ts";
+import { evidenceProvider } from "./providers/evidence.ts";
 import { getLocalRuntime } from "./local-config.ts";
 
 // Only configuration selects the provider. A key never enables OpenAI.
@@ -20,7 +21,11 @@ export function getLlmProvider(): LlmProvider {
       return openaiProvider;
     case "local":
       // Both runtimes execute on the app's own machine; neither has a hosted fallback.
-      return getLocalRuntime() === "embedded" ? embeddedProvider : localProvider;
+      switch (getLocalRuntime()) {
+        case "embedded": return embeddedProvider;
+        case "evidence": return evidenceProvider;
+        default: return localProvider;
+      }
     default:
       throw new Error(
         "Unsupported LLM_MODE. Set LLM_MODE=mock and restart the server.",

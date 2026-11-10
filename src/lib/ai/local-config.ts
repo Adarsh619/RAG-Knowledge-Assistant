@@ -2,7 +2,7 @@ import "server-only";
 import { resolve } from "node:path";
 import { RAG_LIMITS } from "../rag/config.ts";
 
-export type LocalRuntime = "ollama" | "embedded";
+export type LocalRuntime = "ollama" | "embedded" | "evidence";
 
 // Reviewed in-process models. Weights and revision are pinned like MiniLM:
 // prepared once from public Hub URLs, then loaded with remote access disabled.
@@ -75,8 +75,8 @@ export function getLocalOrigin() {
 // Ollama remains the default so existing local installs behave unchanged.
 export function getLocalRuntime(): LocalRuntime {
   const runtime = process.env.LOCAL_RUNTIME?.trim() || "ollama";
-  if (runtime !== "ollama" && runtime !== "embedded")
-    throw new LocalLlmError("LOCAL_RUNTIME must be ollama or embedded.");
+  if (runtime !== "ollama" && runtime !== "embedded" && runtime !== "evidence")
+    throw new LocalLlmError("LOCAL_RUNTIME must be ollama, embedded or evidence.");
   return runtime;
 }
 
@@ -93,7 +93,9 @@ export function getEmbeddedModel() {
 
 /** The model recorded with answers and shown in status, for the configured runtime. */
 export function getActiveLocalModel() {
-  if (getLocalRuntime() === "embedded") {
+  const runtime = getLocalRuntime();
+  if (runtime === "evidence") return { name: "evidence", label: "Evidence answers" };
+  if (runtime === "embedded") {
     const model = getEmbeddedModel();
     return { name: model.id, label: model.label };
   }

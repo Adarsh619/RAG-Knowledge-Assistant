@@ -70,8 +70,10 @@ export async function handleChatRequest(
       const documentResult = chatMode !== "general" && search
         ? await runRag(search, context, { provider, signal: request.signal, onText }) : null;
       // Auto falls back only on a successful, explicitly insufficient retrieval result.
-      // Auth, retrieval, embedding or runtime errors never trigger a fallback.
-      const result = documentResult && !(chatMode === "auto" && documentResult.rag.status === "insufficient_context")
+      // Auth, retrieval, embedding or runtime errors never trigger a fallback. Without a
+      // generator (evidence-only) there is nothing to fall back to, so the result stands.
+      const result = documentResult && !(chatMode === "auto" && !provider.evidenceOnly &&
+        documentResult.rag.status === "insufficient_context")
         ? { ...documentResult, rag: { ...documentResult.rag, chatMode } }
         : await runGeneral(message, provider, chatMode, request.signal, onText);
       return Response.json({

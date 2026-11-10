@@ -9,6 +9,7 @@ import { LocalLlmError, getActiveLocalModel } from "../ai/local-config.ts";
 import { RAG_LIMITS, INSUFFICIENT_CONTEXT_MESSAGE } from "./config.ts";
 import { assembleRagPrompt } from "./prompt.ts";
 import { buildRagSources } from "./sources.ts";
+import { buildEvidenceAnswer } from "./evidence.ts";
 
 export async function answerFromDocuments(
   input: SearchInput,
@@ -38,6 +39,10 @@ export async function answerFromDocuments(
       sources: [],
       rag: { ...summary, status: "insufficient_context", model: null },
     };
+  if (provider.evidenceOnly) {
+    const sources = buildRagSources(prompt.chunks);
+    return { content: buildEvidenceAnswer(sources), sources, rag: { ...summary, status: "evidence", model: null } };
+  }
   const content = await provider.reply(prompt.user, {
     system: prompt.system, signal: options.signal, onText: options.onText,
   });

@@ -38,7 +38,7 @@ test("Runtime defaults to Ollama and only accepts reviewed runtimes and models",
     assert.throws(getEmbeddedModel, e => e.status === 503 && /reviewed models/.test(e.message));
   }
   process.env.LOCAL_RUNTIME = "openai";
-  assert.throws(getLocalRuntime, /ollama or embedded/);
+  assert.throws(getLocalRuntime, /ollama, embedded or evidence/);
 }));
 
 test("Provider selection follows LOCAL_RUNTIME within local mode", () => withEnv({ LLM_MODE: "local" }, () => {

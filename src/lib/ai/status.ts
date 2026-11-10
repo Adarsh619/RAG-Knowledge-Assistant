@@ -23,6 +23,9 @@ export async function getAiStatus(
   try {
     runtime = getLocalRuntime();
     model = getActiveLocalModel().label;
+    if (runtime === "evidence")
+      return { mode, available: true, model, runtime, publicDemo, detail:
+        "Document questions are answered with the most relevant passages and their sources. No AI-written text is generated." };
     const result = await (runtime === "embedded" ? checkEmbedded() : check());
     return { mode, available: result.modelMatches, model, runtime, publicDemo, detail: result.modelMatches
       ? "The reviewed model is available on the app's server. Documents are never sent to a hosted AI provider."

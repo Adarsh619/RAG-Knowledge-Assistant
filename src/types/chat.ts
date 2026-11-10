@@ -34,6 +34,8 @@ export interface ChatErrorResponse {
 export interface LlmProvider {
   mode: LlmMode;
   enabled: boolean;
+  /** No generator: document questions are answered with retrieved evidence only. */
+  evidenceOnly?: boolean;
   reply(message: string, options?: LlmReplyOptions): Promise<string>;
 }
 

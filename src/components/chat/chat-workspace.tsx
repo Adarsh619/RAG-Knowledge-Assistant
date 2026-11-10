@@ -365,9 +365,11 @@ export function ChatWorkspace({
                       ? "Assistant · local mock"
                       : message.rag?.status === "insufficient_context"
                         ? "Not enough document evidence"
-                        : message.rag?.status === "general" ? "General AI answer" : "Based on your documents"}
+                        : message.rag?.status === "general" ? "General AI answer"
+                          : message.rag?.status === "evidence" ? "Evidence from your documents" : "Based on your documents"}
                 </p>
                 {message.role === "assistant" && message.rag?.status === "general" && <p className="answer-origin">Not based on your uploaded documents.</p>}
+                {message.role === "assistant" && message.rag?.status === "evidence" && <p className="answer-origin">Exact passages, not an AI-written answer.</p>}
                 <p className="text-sm leading-6 whitespace-pre-wrap wrap-anywhere">
                   {message.rag?.status === "insufficient_context" ? "Your selected documents do not contain enough information to answer this question." : message.content}
                 </p>
@@ -379,10 +381,10 @@ export function ChatWorkspace({
                       onClick={() => void submitTurn(message.content, message.requestId, message.documentId, retryMode(message.requestId))}
                       className="mt-2 rounded border border-emerald-200 px-3 py-1 font-semibold disabled:opacity-50">Retry reply</button>}
                 </div>}
-                {message.rag?.status === "generated" && (
+                {(message.rag?.status === "generated" || message.rag?.status === "evidence") && (
                   <p className="mt-2 text-xs text-slate-500">{message.rag.contextChunkCount} source {message.rag.contextChunkCount === 1 ? "passage" : "passages"} used</p>
                 )}
-                {message.role === "assistant" && message.rag?.status === "generated" && (
+                {message.role === "assistant" && (message.rag?.status === "generated" || message.rag?.status === "evidence") && (
                   <ChatSources sources={message.sources ?? []} />
                 )}
               </div>
