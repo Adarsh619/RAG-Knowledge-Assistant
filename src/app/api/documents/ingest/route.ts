@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createKnowledgeRepository } from "@/lib/knowledge/repository";
 import { handleIngestDocument } from "@/lib/knowledge/document-handler";
 export const runtime = "nodejs";
+// Embedding a large PDF on a serverless CPU can exceed the default function time.
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   let context = null;
