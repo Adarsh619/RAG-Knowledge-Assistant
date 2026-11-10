@@ -74,21 +74,21 @@ docs/                    architecture, pipelines, security, testing, release, de
 
 ## Deployment
 
-- `Dockerfile` (+ `.dockerignore`) builds one container: locked `npm ci`, `models:prepare`, `next build`, `next start -p 7860` as UID 1000, embedded runtime defaults. Verified locally with Docker.
-- Target: Hugging Face Docker Space on **CPU Basic** (Docker Spaces need HF PRO since 2026; CPU Basic itself has no hourly cost — never select paid hardware). Supabase values go in as Space **Variables** (they are build args). Guide: `docs/deployment-huggingface.md`.
-- HF rejects plain-git binaries, so use `npm run deploy:space` (omits `docs/screenshots`, sends no history).
-- Lockfile must satisfy newer npm (11.19+) used in the image; regenerate with `npx npm@<image npm> install --package-lock-only` if `npm ci` complains.
+- **Approved target ($0, no card):** Vercel Hobby runs the Next.js app (auth, uploads, PDF reading, server-side MiniLM, retrieval, saving) + Supabase Free + a free Hugging Face **ZeroGPU** Gradio Space (`Deadpool1999/groundwork-llm`, Qwen3-4B-Instruct-2507 pinned) for generation, called **from the visitor's browser** so each visitor uses their own GPU quota. Fallback: "Evidence answer" (top passages + citations). UptimeRobot keeps the Space and Supabase awake. Plan phases A–F; A1 (ZeroGPU proof) passed: < 5 GPU-s/answer, first words < 3 s, cross-origin calls allowed.
+- HF Docker Spaces need PRO since 2026 — **rejected**. `Dockerfile` (+ `.dockerignore`) stays for self-hosting: locked `npm ci`, `models:prepare`, `next build`, `next start -p 7860` as UID 1000. `deploy:space` and the README Space front matter are slated for removal in Phase F.
+- Vercel needs MiniLM files traced into functions and non-linux-x64 onnxruntime binaries excluded (288 MB → ~45 MB; limit 250 MB).
+- Lockfile must satisfy newer npm (11.19+); regenerate with `npx npm@11.19.1 install --package-lock-only` if `npm ci` complains (local npm 11.6 drops `@emnapi` entries).
 
 ## Working agreements
 
 - **Ask before every commit and every push** (separately). Explain each change: what, why, how to undo.
 - Don't run `npm run build` while the dev server is running in this checkout.
 - Never read/print secrets from `.env.local`; never handle the user's tokens or passwords.
-- Keep it zero-cost: no paid APIs; HF PRO ($9/mo) is the only accepted paid item.
+- Strictly zero-cost: no paid APIs, subscriptions, paid hardware or card-required plans.
 
-## Current status (2026-11-09)
+## Current status (2026-11-10)
 
-- Branch `feat/embedded-llm` (pushed, 4 commits ahead of `main`, no PR): embedded runtime, model-aware UI, streaming answers, Docker/HF deployment files. `main` is unchanged.
-- Uncommitted: setup-order fix in `docs/deployment-huggingface.md`.
-- Next.js patched 15.5.27 → 15.5.29 (critical GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r); production audit clean. Remaining audit items are dev-only (`minimatch` via typescript-eslint, moderate).
-- Open items: HF PRO/Space creation pending; live-site check of proxy origin/redirect handling; two-real-user acceptance test; license choice; refreshed screenshots; PR to `main` after deployment works.
+- Branch `feat/embedded-llm` (pushed, ahead of `main`, no PR): embedded runtime, model-aware UI, streaming answers, Docker files, Next.js 15.5.29 security patch, this file. `main` is unchanged (still Next.js 15.5.27).
+- Production audit clean on the branch; remaining audit items are dev-only (`minimatch` via typescript-eslint, moderate).
+- Next: Phase A2 (Vercel spike on a throwaway `spike/vercel` branch), then B Evidence mode → C ZeroGPU generation (`LOCAL_RUNTIME=zerogpu`, HMAC-signed two-step turn) → D Vercel go-live → E monitoring → F docs/cleanup/PR to `main`.
+- Also open: two-real-user acceptance test, license choice, refreshed screenshots.
